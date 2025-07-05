@@ -394,3 +394,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Tasmota](https://tasmota.github.io/docs/) - For their excellent open-source firmware
 - All contributors and users of this tool
+- This project's entire codebase was created by vibe coding using [Windsurf AI](https://www.windsurfai.com/)
