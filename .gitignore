@@ -31,6 +31,3 @@ devices.yaml
 .vscode/
 *.swp
 *.swo
-
-# Configuration files
-devices.yaml
