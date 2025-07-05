@@ -1,0 +1,36 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+update_log.txt
+logs/
+
+# Local configuration
+.env
+.env.local
+devices.yaml
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Configuration files
+devices.yaml

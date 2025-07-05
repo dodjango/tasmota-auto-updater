@@ -1,8 +1,9 @@
 devices:
-  - ip: 192.168.1.100
-    username: admin # optional
-    password: secret # optional
-  - ip: 192.168.1.101
-  - ip: 192.168.1.102
-    username: admin
-    password: mypass
+- ip: 192.168.8.191
+- ip: 192.168.8.192
+- ip: 192.168.8.193
+- ip: 192.168.8.194
+- ip: 192.168.8.195
+- ip: 192.168.8.196
+- ip: 192.168.8.197
+- ip: 192.168.8.198
