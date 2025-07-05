@@ -6,6 +6,8 @@ import argparse
 import logging
 import os
 import socket
+import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -26,15 +28,194 @@ def get_dns_name(ip_address):
         pass
     return None
 
-def update_tasmota(device_config, dry_run=False):
+
+def get_device_firmware_version(ip_address, username=None, password=None):
+    """
+    Get the current firmware version from a Tasmota device
+    
+    Args:
+        ip_address (str): IP address of the device
+        username (str, optional): Username for authentication
+        password (str, optional): Password for authentication
+    
+    Returns:
+        dict: Dictionary containing version information or None if failed
+              Keys: 'version', 'core_version', 'sdk_version', 'is_minimal'
+    """
+    logger = logging.getLogger()
+    
+    # Construct base URL with authentication if provided
+    if username and password:
+        base_url = f"http://{username}:{password}@{ip_address}/cm"
+    else:
+        base_url = f"http://{ip_address}/cm"
+    
+    # Command parameters to get status
+    params = {"cmnd": "Status 2"}
+    
+    try:
+        logger.debug(f"{ip_address}: Requesting firmware version information")
+        response = requests.get(base_url, params=params, timeout=5)
+        
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                if 'StatusFWR' in data:
+                    fw_data = data['StatusFWR']
+                    version = fw_data.get('Version', 'Unknown')
+                    
+                    # Extract core and SDK versions if available
+                    core_version = fw_data.get('Core', 'Unknown')
+                    sdk_version = fw_data.get('SDK', 'Unknown')
+                    
+                    # Check if it's a minimal version (tasmota-minimal)
+                    is_minimal = 'minimal' in version.lower() if version != 'Unknown' else False
+                    
+                    logger.debug(f"{ip_address}: Firmware version: {version}, Core: {core_version}, SDK: {sdk_version}")
+                    
+                    return {
+                        'version': version,
+                        'core_version': core_version,
+                        'sdk_version': sdk_version,
+                        'is_minimal': is_minimal
+                    }
+                else:
+                    logger.warning(f"{ip_address}: StatusFWR not found in device response")
+            except ValueError:
+                logger.warning(f"{ip_address}: Invalid JSON response from device")
+        else:
+            logger.warning(f"{ip_address}: Failed to get firmware version. Status code: {response.status_code}")
+    
+    except requests.exceptions.RequestException as e:
+        logger.error(f"{ip_address}: Error connecting to device: {e}")
+    
+    return None
+
+
+def fetch_latest_tasmota_release():
+    """
+    Fetch information about the latest official Tasmota release from GitHub
+    
+    Returns:
+        dict: Dictionary containing release information or None if failed
+              Keys: 'version', 'release_date', 'release_notes', 'download_url'
+    """
+    logger = logging.getLogger()
+    github_api_url = "https://api.github.com/repos/arendst/Tasmota/releases/latest"
+    
+    try:
+        logger.debug("Fetching latest Tasmota release information from GitHub")
+        response = requests.get(github_api_url, timeout=10)
+        
+        if response.status_code == 200:
+            release_data = response.json()
+            
+            # Extract version (remove 'v' prefix if present)
+            version = release_data.get('tag_name', '')
+            if version.startswith('v'):
+                version = version[1:]
+            
+            # Extract release date and convert to datetime object
+            release_date_str = release_data.get('published_at', '')
+            try:
+                release_date = datetime.strptime(release_date_str, "%Y-%m-%dT%H:%M:%SZ")
+                release_date_formatted = release_date.strftime("%Y-%m-%d")
+            except ValueError:
+                release_date_formatted = "Unknown"
+            
+            # Extract release notes (body)
+            release_notes = release_data.get('body', 'No release notes available')
+            
+            # Extract download URL for the binary
+            download_url = None
+            assets = release_data.get('assets', [])
+            for asset in assets:
+                if asset.get('name', '').lower().endswith('.bin') and 'tasmota.bin' in asset.get('name', '').lower():
+                    download_url = asset.get('browser_download_url')
+                    break
+            
+            logger.info(f"Latest Tasmota release: {version} (released on {release_date_formatted})")
+            
+            return {
+                'version': version,
+                'release_date': release_date_formatted,
+                'release_notes': release_notes,
+                'download_url': download_url
+            }
+        else:
+            logger.error(f"Failed to fetch latest release info. Status code: {response.status_code}")
+    
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error connecting to GitHub API: {e}")
+    except (ValueError, KeyError) as e:
+        logger.error(f"Error parsing GitHub API response: {e}")
+    
+    return None
+
+
+def compare_versions(device_version, latest_version):
+    """
+    Compare device firmware version with latest available version
+    
+    Args:
+        device_version (str): Current device firmware version
+        latest_version (str): Latest available firmware version
+    
+    Returns:
+        bool: True if update is needed, False if device is up to date
+    """
+    logger = logging.getLogger()
+    
+    # Handle unknown versions
+    if device_version == "Unknown" or not latest_version:
+        logger.debug("Cannot compare versions: device version unknown or latest version not available")
+        return True  # Recommend update if we can't determine versions
+    
+    # Clean up version strings to extract just the version numbers
+    # Tasmota versions typically look like "9.5.0" or "tasmota-9.5.0"
+    device_version_clean = re.search(r'(\d+\.\d+\.\d+)', device_version)
+    latest_version_clean = re.search(r'(\d+\.\d+\.\d+)', latest_version)
+    
+    if not device_version_clean or not latest_version_clean:
+        logger.debug(f"Cannot parse version numbers: device={device_version}, latest={latest_version}")
+        return True  # Recommend update if we can't parse versions
+    
+    device_version_clean = device_version_clean.group(1)
+    latest_version_clean = latest_version_clean.group(1)
+    
+    # Split versions into components and convert to integers for comparison
+    device_parts = [int(part) for part in device_version_clean.split('.')]
+    latest_parts = [int(part) for part in latest_version_clean.split('.')]
+    
+    # Compare version components
+    for i in range(min(len(device_parts), len(latest_parts))):
+        if device_parts[i] < latest_parts[i]:
+            logger.debug(f"Update needed: device version {device_version_clean} is older than latest version {latest_version_clean}")
+            return True  # Update needed
+        elif device_parts[i] > latest_parts[i]:
+            logger.debug(f"No update needed: device version {device_version_clean} is newer than latest version {latest_version_clean}")
+            return False  # Device is newer (beta/development version)
+    
+    # If we get here, the versions are equal up to the common length
+    if len(device_parts) < len(latest_parts):
+        logger.debug(f"Update needed: device version {device_version_clean} is older than latest version {latest_version_clean}")
+        return True  # Device has fewer version components, consider it older
+    
+    logger.debug(f"No update needed: device version {device_version_clean} is up to date with latest version {latest_version_clean}")
+    return False  # Device is up to date
+
+def update_tasmota(device_config, dry_run=False, skip_up_to_date=True, latest_release_info=None):
     """
     Update Tasmota device remotely via HTTP API
     
     Args:
         device_config (dict): Device configuration containing IP and optional credentials
         dry_run (bool): If True, simulate the update process without making changes
+        skip_up_to_date (bool): If True, skip devices that are already up to date
+        latest_release_info (dict): Information about the latest release, if already fetched
     Returns:
         bool: True if update was successful (or would be in dry run mode), False otherwise
+        dict: Additional result information including version details
     """
     logger = logging.getLogger()
     ip_address = device_config['ip']
@@ -52,6 +233,41 @@ def update_tasmota(device_config, dry_run=False):
     else:
         logger.info(f"Processing device: {device_info}")
     
+    # Get current firmware version from device
+    current_version_info = get_device_firmware_version(ip_address, username, password)
+    
+    # If we couldn't get the current version, log a warning but continue
+    if not current_version_info:
+        logger.warning(f"{device_info}: Could not determine current firmware version")
+        current_version = "Unknown"
+    else:
+        current_version = current_version_info['version']
+        logger.info(f"{device_info}: Current firmware version: {current_version}")
+    
+    # Get latest release info if not provided
+    if not latest_release_info:
+        latest_release_info = fetch_latest_tasmota_release()
+    
+    # If we couldn't get the latest release info, log an error but continue with update
+    if not latest_release_info:
+        logger.error("Could not fetch latest release information, proceeding with update anyway")
+        latest_version = None
+    else:
+        latest_version = latest_release_info['version']
+        logger.info(f"Latest Tasmota release: {latest_version} (released on {latest_release_info['release_date']})")
+    
+    # Check if update is needed
+    if skip_up_to_date and current_version != "Unknown" and latest_version:
+        update_needed = compare_versions(current_version, latest_version)
+        if not update_needed:
+            logger.info(f"{device_info}: Device is already up to date (running version {current_version}), skipping update")
+            return True, {
+                'status': 'skipped',
+                'reason': 'already_up_to_date',
+                'current_version': current_version,
+                'latest_version': latest_version
+            }
+    
     # Construct base URL with authentication if provided
     if username and password:
         base_url = f"http://{username}:{password}@{ip_address}/cm"
@@ -65,9 +281,18 @@ def update_tasmota(device_config, dry_run=False):
     
     if dry_run:
         # In dry run mode, we don't actually send any requests
-        logger.info(f"{device_info}: Would upgrade to latest official release (DRY RUN)")
-        logger.debug(f"{device_info}: Would send request to {base_url.replace(password or '', '****')} with params {params}")
-        logger.info(f"{device_info}: Would wait for device to restart and come back online (DRY RUN)")
+        if current_version != "Unknown" and latest_version and not compare_versions(current_version, latest_version):
+            logger.info(f"{device_info}: Would skip update as device is already running version {current_version} (DRY RUN)")
+            return True, {
+                'status': 'would_skip',
+                'reason': 'already_up_to_date',
+                'current_version': current_version,
+                'latest_version': latest_version
+            }
+        else:
+            logger.info(f"{device_info}: Would upgrade from version {current_version} to {latest_version or 'latest'} (DRY RUN)")
+            logger.debug(f"{device_info}: Would send request to {base_url.replace(password or '', '****')} with params {params}")
+            logger.info(f"{device_info}: Would wait for device to restart and come back online (DRY RUN)")
         
         # Check if the device is reachable at all
         try:
@@ -79,15 +304,24 @@ def update_tasmota(device_config, dry_run=False):
             status_response = requests.get(check_url, timeout=5)
             
             logger.info(f"{device_info}: Device is reachable, status code: {status_response.status_code} (DRY RUN)")
-            return True
+            return True, {
+                'status': 'would_update',
+                'current_version': current_version,
+                'latest_version': latest_version
+            }
         except requests.exceptions.RequestException as e:
             logger.warning(f"{device_info}: Device is not reachable: {e} (DRY RUN)")
-            return False
+            return False, {
+                'status': 'error',
+                'reason': 'not_reachable',
+                'current_version': current_version,
+                'latest_version': latest_version
+            }
     else:
         # Normal mode - actually perform the update
         try:
             # Direct upgrade to latest release
-            logger.info(f"{device_info}: Upgrading to latest official release")
+            logger.info(f"{device_info}: Upgrading from version {current_version} to {latest_version or 'latest'}")
             logger.debug(f"{device_info}: Sending request to {base_url.replace(password or '', '****')} with params {params}")
             
             response = requests.get(base_url, params=params, timeout=5)
@@ -113,30 +347,63 @@ def update_tasmota(device_config, dry_run=False):
                     
                     if status_response.status_code == 200:
                         logger.info(f"{device_info}: Device is back online!")
-                        return True
+                        
+                        # Try to get the new firmware version
+                        new_version_info = get_device_firmware_version(ip_address, username, password)
+                        new_version = new_version_info['version'] if new_version_info else "Unknown"
+                        
+                        if new_version != "Unknown" and new_version != current_version:
+                            logger.info(f"{device_info}: Successfully updated from {current_version} to {new_version}")
+                        else:
+                            logger.info(f"{device_info}: Device is back online, new version: {new_version}")
+                            
+                        return True, {
+                            'status': 'updated',
+                            'previous_version': current_version,
+                            'new_version': new_version
+                        }
                     else:
                         logger.warning(f"{device_info}: Device responded with status code {status_response.status_code}")
-                        return False
+                        return False, {
+                            'status': 'error',
+                            'reason': f"device_responded_with_status_{status_response.status_code}"
+                        }
                         
                 except requests.exceptions.RequestException as e:
                     logger.warning(f"{device_info}: Could not verify if device is back online: {e}")
-                    return False
+                    return False, {
+                        'status': 'error',
+                        'reason': 'verification_failed',
+                        'error': str(e)
+                    }
                     
             else:
                 logger.error(f"{device_info}: Failed to initiate update. Status code: {response.status_code}")
-                return False
+                return False, {
+                    'status': 'error',
+                    'reason': f"failed_to_initiate_update_status_{response.status_code}"
+                }
                 
         except requests.exceptions.RequestException as e:
             logger.error(f"{device_info}: Error connecting to device: {e}")
-            return False
+            return False, {
+                'status': 'error',
+                'reason': 'connection_error',
+                'error': str(e)
+            }
 
-def update_devices_from_file(filename, dry_run=False):
+def update_devices_from_file(filename, dry_run=False, check_only=False, skip_up_to_date=True):
     """
     Update multiple Tasmota devices from a YAML file
     
     Args:
         filename (str): Path to YAML file containing device configurations
         dry_run (bool): If True, simulate the update process without making changes
+        check_only (bool): If True, only check firmware versions without updating
+        skip_up_to_date (bool): If True, skip devices that are already up to date
+    
+    Returns:
+        dict: Summary of results including counts of devices in different states
     """
     logger = logging.getLogger()
     
@@ -147,16 +414,47 @@ def update_devices_from_file(filename, dry_run=False):
             
         if not config or 'devices' not in config or not config['devices']:
             logger.warning("No devices found in the configuration file")
-            return
+            return {"total": 0, "successful": 0, "failed": 0, "results": {}}
         
         devices = config['devices']
-        if dry_run:
+        
+        # Fetch latest release info once to avoid multiple API calls
+        latest_release_info = fetch_latest_tasmota_release()
+        if not latest_release_info:
+            logger.error("Failed to fetch latest release information")
+            if check_only:
+                logger.error("Cannot perform version check without latest release information")
+                return {"total": 0, "successful": 0, "failed": 0, "results": {}}
+            logger.warning("Proceeding with updates without version comparison")
+        else:
+            latest_version = latest_release_info['version']
+            release_date = latest_release_info['release_date']
+            logger.info(f"Latest Tasmota release: {latest_version} (released on {release_date})")
+            if latest_release_info.get('release_notes'):
+                logger.debug("Release notes:")
+                for line in latest_release_info['release_notes'].split('\n')[:10]:  # Show first 10 lines
+                    if line.strip():
+                        logger.debug(f"  {line.strip()}")
+        
+        if check_only:
+            logger.info(f"Found {len(devices)} devices to check for updates")
+        elif dry_run:
             logger.info(f"Found {len(devices)} devices that would be updated (DRY RUN)")
         else:
             logger.info(f"Found {len(devices)} devices to update")
         
         results = {}
         device_dns_map = {}
+        device_versions = {}
+        update_status = {
+            'up_to_date': 0,
+            'needs_update': 0,
+            'updated': 0,
+            'skipped': 0,
+            'failed': 0,
+            'unreachable': 0
+        }
+        
         for device in devices:
             ip = device['ip']
             
@@ -167,24 +465,135 @@ def update_devices_from_file(filename, dry_run=False):
                 device_info = f"{ip} ({dns_name})"
                 device_dns_map[ip] = dns_name
             
-            if dry_run:
-                logger.info(f"\nWould update device at {device_info} (DRY RUN)")
+            if check_only:
+                logger.info(f"\nChecking device at {device_info}")
+                # Only get version info without updating
+                current_version_info = get_device_firmware_version(ip, device.get('username'), device.get('password'))
+                
+                if not current_version_info:
+                    logger.warning(f"{device_info}: Could not determine current firmware version")
+                    results[ip] = (False, {'status': 'error', 'reason': 'version_check_failed'})
+                    update_status['unreachable'] += 1
+                    continue
+                
+                current_version = current_version_info['version']
+                device_versions[ip] = current_version
+                logger.info(f"{device_info}: Current firmware version: {current_version}")
+                
+                if latest_release_info:
+                    update_needed = compare_versions(current_version, latest_release_info['version'])
+                    if update_needed:
+                        logger.info(f"{device_info}: Update available: {current_version} -> {latest_release_info['version']}")
+                        results[ip] = (True, {
+                            'status': 'needs_update',
+                            'current_version': current_version,
+                            'latest_version': latest_release_info['version']
+                        })
+                        update_status['needs_update'] += 1
+                    else:
+                        logger.info(f"{device_info}: Up to date (running version {current_version})")
+                        results[ip] = (True, {
+                            'status': 'up_to_date',
+                            'current_version': current_version,
+                            'latest_version': latest_release_info['version']
+                        })
+                        update_status['up_to_date'] += 1
             else:
-                logger.info(f"\nUpdating device at {device_info}")
-            success = update_tasmota(device, dry_run=dry_run)
-            results[ip] = success
+                # Perform update or dry run
+                if dry_run:
+                    logger.info(f"\nWould process device at {device_info} (DRY RUN)")
+                else:
+                    logger.info(f"\nProcessing device at {device_info}")
+                
+                success, result_info = update_tasmota(
+                    device, 
+                    dry_run=dry_run, 
+                    skip_up_to_date=skip_up_to_date, 
+                    latest_release_info=latest_release_info
+                )
+                
+                results[ip] = (success, result_info)
+                
+                # Update status counters
+                if success:
+                    if result_info.get('status') == 'skipped' or result_info.get('status') == 'would_skip':
+                        update_status['up_to_date'] += 1
+                        update_status['skipped'] += 1
+                    elif result_info.get('status') == 'updated':
+                        update_status['updated'] += 1
+                    elif result_info.get('status') == 'would_update':
+                        update_status['needs_update'] += 1
+                else:
+                    if result_info.get('reason') == 'not_reachable':
+                        update_status['unreachable'] += 1
+                    update_status['failed'] += 1
+                
+                # Store version info
+                if 'current_version' in result_info:
+                    device_versions[ip] = result_info['current_version']
         
         # Log summary
-        if dry_run:
+        if check_only:
+            logger.info("\nFirmware Check Summary:")
+            logger.info("-" * 40)
+            logger.info(f"Devices checked: {len(results)}")
+            logger.info(f"Up to date: {update_status['up_to_date']}")
+            logger.info(f"Updates available: {update_status['needs_update']}")
+            logger.info(f"Unreachable devices: {update_status['unreachable']}")
+            
+            if update_status['needs_update'] > 0:
+                logger.info("\nDevices that need updates:")
+                for ip, (success, info) in results.items():
+                    if success and info.get('status') == 'needs_update':
+                        device_info = ip
+                        if ip in device_dns_map:
+                            device_info = f"{ip} ({device_dns_map[ip]})"
+                        current = info.get('current_version', 'Unknown')
+                        latest = info.get('latest_version', 'Unknown')
+                        logger.info(f"- {device_info}: {current} -> {latest}")
+            
+            if update_status['unreachable'] > 0:
+                logger.warning("\nUnreachable devices:")
+                for ip, (success, info) in results.items():
+                    if not success:
+                        device_info = ip
+                        if ip in device_dns_map:
+                            device_info = f"{ip} ({device_dns_map[ip]})"
+                        logger.warning(f"- {device_info}")
+                        
+        elif dry_run:
             logger.info("\nDRY RUN Summary:")
             logger.info("-" * 40)
-            successful = sum(1 for success in results.values() if success)
-            logger.info(f"Would successfully update: {successful}/{len(results)} devices")
+            logger.info(f"Devices checked: {len(results)}")
+            logger.info(f"Would skip (up to date): {update_status['skipped']}")
+            logger.info(f"Would update: {update_status['needs_update']}")
+            logger.info(f"Unreachable devices: {update_status['unreachable']}")
             
-            if len(results) != successful:
-                logger.warning("Devices that would fail:")
-                for ip, success in results.items():
-                    if not success:
+            if update_status['needs_update'] > 0:
+                logger.info("\nDevices that would be updated:")
+                for ip, (success, info) in results.items():
+                    if success and info.get('status') == 'would_update':
+                        device_info = ip
+                        if ip in device_dns_map:
+                            device_info = f"{ip} ({device_dns_map[ip]})"
+                        current = info.get('current_version', 'Unknown')
+                        latest = info.get('latest_version', 'Unknown')
+                        logger.info(f"- {device_info}: {current} -> {latest}")
+            
+            if update_status['skipped'] > 0:
+                logger.info("\nDevices that would be skipped (already up to date):")
+                for ip, (success, info) in results.items():
+                    if success and info.get('status') == 'would_skip':
+                        device_info = ip
+                        if ip in device_dns_map:
+                            device_info = f"{ip} ({device_dns_map[ip]})"
+                        version = info.get('current_version', 'Unknown')
+                        logger.info(f"- {device_info}: {version}")
+            
+            if update_status['unreachable'] > 0:
+                logger.warning("\nUnreachable devices:")
+                for ip, (success, info) in results.items():
+                    if not success and info.get('reason') == 'not_reachable':
                         device_info = ip
                         if ip in device_dns_map:
                             device_info = f"{ip} ({device_dns_map[ip]})"
@@ -192,23 +601,52 @@ def update_devices_from_file(filename, dry_run=False):
         else:
             logger.info("\nUpdate Summary:")
             logger.info("-" * 40)
-            successful = sum(1 for success in results.values() if success)
-            logger.info(f"Successfully updated: {successful}/{len(results)} devices")
+            logger.info(f"Devices processed: {len(results)}")
+            logger.info(f"Skipped (up to date): {update_status['skipped']}")
+            logger.info(f"Successfully updated: {update_status['updated']}")
+            logger.info(f"Failed updates: {update_status['failed']}")
             
-            if len(results) != successful:
-                logger.warning("Failed updates:")
-                for ip, success in results.items():
+            if update_status['updated'] > 0:
+                logger.info("\nSuccessfully updated devices:")
+                for ip, (success, info) in results.items():
+                    if success and info.get('status') == 'updated':
+                        device_info = ip
+                        if ip in device_dns_map:
+                            device_info = f"{ip} ({device_dns_map[ip]})"
+                        prev_version = info.get('previous_version', 'Unknown')
+                        new_version = info.get('new_version', 'Unknown')
+                        logger.info(f"- {device_info}: {prev_version} -> {new_version}")
+            
+            if update_status['skipped'] > 0:
+                logger.info("\nSkipped devices (already up to date):")
+                for ip, (success, info) in results.items():
+                    if success and info.get('status') == 'skipped':
+                        device_info = ip
+                        if ip in device_dns_map:
+                            device_info = f"{ip} ({device_dns_map[ip]})"
+                        version = info.get('current_version', 'Unknown')
+                        logger.info(f"- {device_info}: {version}")
+            
+            if update_status['failed'] > 0:
+                logger.warning("\nFailed updates:")
+                for ip, (success, info) in results.items():
                     if not success:
                         device_info = ip
                         if ip in device_dns_map:
                             device_info = f"{ip} ({device_dns_map[ip]})"
-                        logger.warning(f"- {device_info}")
+                        reason = info.get('reason', 'unknown_error')
+                        logger.warning(f"- {device_info}: {reason}")
         
         # Return results for potential further processing
         return {
             "total": len(results),
-            "successful": successful,
-            "failed": len(results) - successful,
+            "successful": update_status['updated'] + update_status['skipped'] if not check_only else update_status['up_to_date'] + update_status['needs_update'],
+            "failed": update_status['failed'],
+            "up_to_date": update_status['up_to_date'],
+            "needs_update": update_status['needs_update'],
+            "updated": update_status['updated'],
+            "skipped": update_status['skipped'],
+            "unreachable": update_status['unreachable'],
             "results": results
         }
                     
@@ -220,6 +658,7 @@ def update_devices_from_file(filename, dry_run=False):
         sys.exit(1)
     except Exception as e:
         logger.error(f"Error reading file: {e}")
+        logger.debug("Exception details:", exc_info=True)
         sys.exit(1)
 
 def create_devices_file_interactively(devices_file):
@@ -439,6 +878,16 @@ if __name__ == "__main__":
         help="Simulate the update process without making any changes"
     )
     parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Only check firmware versions without updating any devices"
+    )
+    parser.add_argument(
+        "--update-all",
+        action="store_true",
+        help="Update all devices even if they are already running the latest version"
+    )
+    parser.add_argument(
         "--log-file", 
         default="logs/tasmota_updater.log", 
         help="Path to log file (default: logs/tasmota_updater.log)"
@@ -456,7 +905,10 @@ if __name__ == "__main__":
     log_level = getattr(logging, args.log_level)
     logger = setup_logging(args.log_file, log_level)
     
-    if args.dry_run:
+    # Determine the operation mode
+    if args.check_only:
+        logger.info("Starting Tasmota Updater in CHECK ONLY mode (only checking firmware versions)")
+    elif args.dry_run:
         logger.info("Starting Tasmota Updater in DRY RUN mode (no changes will be made)")
     else:
         logger.info("Starting Tasmota Updater")
@@ -472,9 +924,27 @@ if __name__ == "__main__":
     
     # Update devices
     logger.info(f"Using configuration file: {args.file}")
-    update_devices_from_file(args.file, dry_run=args.dry_run)
     
-    if args.dry_run:
+    # Determine whether to skip up-to-date devices
+    skip_up_to_date = not args.update_all
+    if not skip_up_to_date and not args.check_only:
+        logger.info("Will attempt to update all devices, even those already on the latest version")
+    
+    # Process devices
+    result = update_devices_from_file(
+        args.file, 
+        dry_run=args.dry_run, 
+        check_only=args.check_only,
+        skip_up_to_date=skip_up_to_date
+    )
+    
+    # Final status message
+    if args.check_only:
+        logger.info(f"Tasmota Updater finished checking {result['total']} devices: "
+                   f"{result['up_to_date']} up to date, {result['needs_update']} need updates, "
+                   f"{result['unreachable']} unreachable")
+    elif args.dry_run:
         logger.info("Tasmota Updater finished (DRY RUN mode - no changes were made)")
     else:
-        logger.info("Tasmota Updater finished")
+        logger.info(f"Tasmota Updater finished: {result['updated']} updated, {result['skipped']} skipped, "
+                   f"{result['failed']} failed")

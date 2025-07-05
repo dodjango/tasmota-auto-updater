@@ -12,6 +12,9 @@ A simple Python script to remotely update Tasmota devices over your network usin
 - 📊 Detailed status reporting for each device
 - 📝 Summary report of successful and failed updates
 - 🔐 Support for devices with authentication
+- 🔎 Check current firmware versions on devices without updating
+- 🔄 Skip updates for devices already running the latest version
+- 📋 Compare installed versions with the latest official release
 
 ## Prerequisites
 
@@ -162,7 +165,7 @@ uv run python tasmota_updater.py
 The script supports several command-line arguments:
 
 ```
-usage: tasmota_updater.py [-h] [-f FILE] [--example] [--non-interactive] [--dry-run] [--log-file LOG_FILE] [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
+usage: tasmota_updater.py [-h] [-f FILE] [--example] [--non-interactive] [--dry-run] [--check-only] [--update-all] [--log-file LOG_FILE] [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
 
 Update Tasmota devices over your network
 
@@ -172,6 +175,8 @@ options:
   --example             Create an example configuration file and exit
   --non-interactive     Don't use interactive prompts, create example file if needed
   --dry-run             Simulate the update process without making any changes
+  --check-only          Only check firmware versions without updating any devices
+  --update-all          Update all devices even if they are already running the latest version
   --log-file LOG_FILE   Path to log file (default: logs/tasmota_updater.log)
   --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         Logging level (default: INFO)
@@ -191,6 +196,12 @@ uv run python tasmota_updater.py --non-interactive
 
 # Dry run mode - simulate updates without making changes
 uv run python tasmota_updater.py --dry-run
+
+# Check firmware versions without updating
+uv run python tasmota_updater.py --check-only
+
+# Update all devices even if they're already on the latest version
+uv run python tasmota_updater.py --update-all
 
 # Specify a custom log file
 uv run python tasmota_updater.py --log-file /var/log/tasmota_updates.log
