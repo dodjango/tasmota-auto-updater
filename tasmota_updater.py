@@ -5,8 +5,26 @@ import yaml
 import argparse
 import logging
 import os
+import socket
 from datetime import datetime
 from pathlib import Path
+
+def get_dns_name(ip_address):
+    """
+    Try to get the DNS name for an IP address
+    
+    Args:
+        ip_address (str): IP address to lookup
+    Returns:
+        str: DNS name if found, otherwise None
+    """
+    try:
+        dns_name = socket.getfqdn(ip_address)
+        if dns_name != ip_address:
+            return dns_name
+    except Exception:
+        pass
+    return None
 
 def update_tasmota(device_config, dry_run=False):
     """
@@ -23,27 +41,33 @@ def update_tasmota(device_config, dry_run=False):
     username = device_config.get('username')
     password = device_config.get('password')
     
+    # Try to get DNS name
+    dns_name = get_dns_name(ip_address)
+    device_info = ip_address
+    if dns_name:
+        device_info = f"{ip_address} ({dns_name})"
+    
     if dry_run:
-        logger.info(f"Processing device: {ip_address} (DRY RUN)")
+        logger.info(f"Processing device: {device_info} (DRY RUN)")
     else:
-        logger.info(f"Processing device: {ip_address}")
+        logger.info(f"Processing device: {device_info}")
     
     # Construct base URL with authentication if provided
     if username and password:
         base_url = f"http://{username}:{password}@{ip_address}/cm"
-        logger.debug(f"Using authentication for {ip_address}")
+        logger.debug(f"Using authentication for {device_info}")
     else:
         base_url = f"http://{ip_address}/cm"
-        logger.debug(f"No authentication provided for {ip_address}")
+        logger.debug(f"No authentication provided for {device_info}")
     
     # Command parameters
     params = {"cmnd": "Upgrade 1"}
     
     if dry_run:
         # In dry run mode, we don't actually send any requests
-        logger.info(f"{ip_address}: Would upgrade to latest official release (DRY RUN)")
-        logger.debug(f"{ip_address}: Would send request to {base_url.replace(password or '', '****')} with params {params}")
-        logger.info(f"{ip_address}: Would wait for device to restart and come back online (DRY RUN)")
+        logger.info(f"{device_info}: Would upgrade to latest official release (DRY RUN)")
+        logger.debug(f"{device_info}: Would send request to {base_url.replace(password or '', '****')} with params {params}")
+        logger.info(f"{device_info}: Would wait for device to restart and come back online (DRY RUN)")
         
         # Check if the device is reachable at all
         try:
@@ -51,29 +75,29 @@ def update_tasmota(device_config, dry_run=False):
             if username and password:
                 check_url = f"http://{username}:{password}@{ip_address}"
             
-            logger.debug(f"{ip_address}: Checking if device is reachable (DRY RUN connectivity test)")
+            logger.debug(f"{device_info}: Checking if device is reachable (DRY RUN connectivity test)")
             status_response = requests.get(check_url, timeout=5)
             
-            logger.info(f"{ip_address}: Device is reachable, status code: {status_response.status_code} (DRY RUN)")
+            logger.info(f"{device_info}: Device is reachable, status code: {status_response.status_code} (DRY RUN)")
             return True
         except requests.exceptions.RequestException as e:
-            logger.warning(f"{ip_address}: Device is not reachable: {e} (DRY RUN)")
+            logger.warning(f"{device_info}: Device is not reachable: {e} (DRY RUN)")
             return False
     else:
         # Normal mode - actually perform the update
         try:
             # Direct upgrade to latest release
-            logger.info(f"{ip_address}: Upgrading to latest official release")
-            logger.debug(f"{ip_address}: Sending request to {base_url.replace(password or '', '****')} with params {params}")
+            logger.info(f"{device_info}: Upgrading to latest official release")
+            logger.debug(f"{device_info}: Sending request to {base_url.replace(password or '', '****')} with params {params}")
             
             response = requests.get(base_url, params=params, timeout=5)
             
-            logger.info(f"{ip_address}: Initiating update, status code: {response.status_code}")
+            logger.info(f"{device_info}: Initiating update, status code: {response.status_code}")
             
             if response.status_code == 200:
-                logger.info(f"{ip_address}: Update command sent successfully")
-                logger.info(f"{ip_address}: Device will restart automatically after update")
-                logger.info(f"{ip_address}: Waiting for device to come back online...")
+                logger.info(f"{device_info}: Update command sent successfully")
+                logger.info(f"{device_info}: Device will restart automatically after update")
+                logger.info(f"{device_info}: Waiting for device to come back online...")
                 
                 # Wait for device to update and restart
                 time.sleep(90)  # Increased wait time for safety
@@ -84,26 +108,26 @@ def update_tasmota(device_config, dry_run=False):
                     if username and password:
                         check_url = f"http://{username}:{password}@{ip_address}"
                     
-                    logger.debug(f"{ip_address}: Checking if device is back online")
+                    logger.debug(f"{device_info}: Checking if device is back online")
                     status_response = requests.get(check_url, timeout=5)
                     
                     if status_response.status_code == 200:
-                        logger.info(f"{ip_address}: Device is back online!")
+                        logger.info(f"{device_info}: Device is back online!")
                         return True
                     else:
-                        logger.warning(f"{ip_address}: Device responded with status code {status_response.status_code}")
+                        logger.warning(f"{device_info}: Device responded with status code {status_response.status_code}")
                         return False
                         
                 except requests.exceptions.RequestException as e:
-                    logger.warning(f"{ip_address}: Could not verify if device is back online: {e}")
+                    logger.warning(f"{device_info}: Could not verify if device is back online: {e}")
                     return False
                     
             else:
-                logger.error(f"{ip_address}: Failed to initiate update. Status code: {response.status_code}")
+                logger.error(f"{device_info}: Failed to initiate update. Status code: {response.status_code}")
                 return False
                 
         except requests.exceptions.RequestException as e:
-            logger.error(f"{ip_address}: Error connecting to device: {e}")
+            logger.error(f"{device_info}: Error connecting to device: {e}")
             return False
 
 def update_devices_from_file(filename, dry_run=False):
@@ -132,12 +156,21 @@ def update_devices_from_file(filename, dry_run=False):
             logger.info(f"Found {len(devices)} devices to update")
         
         results = {}
+        device_dns_map = {}
         for device in devices:
             ip = device['ip']
+            
+            # Try to get DNS name
+            dns_name = get_dns_name(ip)
+            device_info = ip
+            if dns_name:
+                device_info = f"{ip} ({dns_name})"
+                device_dns_map[ip] = dns_name
+            
             if dry_run:
-                logger.info(f"\nWould update device at {ip} (DRY RUN)")
+                logger.info(f"\nWould update device at {device_info} (DRY RUN)")
             else:
-                logger.info(f"\nUpdating device at {ip}")
+                logger.info(f"\nUpdating device at {device_info}")
             success = update_tasmota(device, dry_run=dry_run)
             results[ip] = success
         
@@ -152,7 +185,10 @@ def update_devices_from_file(filename, dry_run=False):
                 logger.warning("Devices that would fail:")
                 for ip, success in results.items():
                     if not success:
-                        logger.warning(f"- {ip} (not reachable in dry run test)")
+                        device_info = ip
+                        if ip in device_dns_map:
+                            device_info = f"{ip} ({device_dns_map[ip]})"
+                        logger.warning(f"- {device_info} (not reachable in dry run test)")
         else:
             logger.info("\nUpdate Summary:")
             logger.info("-" * 40)
@@ -163,7 +199,10 @@ def update_devices_from_file(filename, dry_run=False):
                 logger.warning("Failed updates:")
                 for ip, success in results.items():
                     if not success:
-                        logger.warning(f"- {ip}")
+                        device_info = ip
+                        if ip in device_dns_map:
+                            device_info = f"{ip} ({device_dns_map[ip]})"
+                        logger.warning(f"- {device_info}")
         
         # Return results for potential further processing
         return {
