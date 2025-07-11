@@ -1,156 +1,107 @@
-import requests
-import time
 import sys
-import yaml
 import argparse
 import logging
 import os
-import socket
-import json
-import re
-from datetime import datetime
+import yaml
 from pathlib import Path
 
-def get_dns_name(ip_address):
+# Import functions from the refactored modules
+from app.tasmota.updater import (
+    get_device_firmware_version,
+    fetch_latest_tasmota_release,
+    compare_versions,
+    update_device_firmware,
+    get_dns_name
+)
+from app.tasmota.utils import load_devices_from_file, setup_logging
+
+# Note: The following functions have been imported from app.tasmota.updater and app.tasmota.utils modules:
+# - get_dns_name
+# - get_device_firmware_version
+# - fetch_latest_tasmota_release
+# - compare_versions
+# - update_device_firmware
+
+
+def update_tasmota(device_config, dry_run=False, skip_up_to_date=True, latest_release_info=None):
     """
-    Try to get the DNS name for an IP address
+    Update Tasmota device remotely via HTTP API
     
     Args:
-        ip_address (str): IP address to lookup
+        device_config (dict): Device configuration containing IP and optional credentials
+        dry_run (bool): If True, simulate the update process without making changes
+        skip_up_to_date (bool): If True, skip devices that are already up to date
+        latest_release_info (dict): Information about the latest release, if already fetched
     Returns:
-        str: DNS name if found, otherwise None
-    """
-    try:
-        dns_name = socket.getfqdn(ip_address)
-        if dns_name != ip_address:
-            return dns_name
-    except Exception:
-        pass
-    return None
-
-
-def get_device_firmware_version(ip_address, username=None, password=None):
-    """
-    Get the current firmware version from a Tasmota device
-    
-    Args:
-        ip_address (str): IP address of the device
-        username (str, optional): Username for authentication
-        password (str, optional): Password for authentication
-    
-    Returns:
-        dict: Dictionary containing version information or None if failed
-              Keys: 'version', 'core_version', 'sdk_version', 'is_minimal'
+        bool: True if update was successful (or would be in dry run mode), False otherwise
+        dict: Additional result information including version details
     """
     logger = logging.getLogger()
+    ip_address = device_config.get('ip')
+    username = device_config.get('username')
+    password = device_config.get('password')
     
-    # Construct base URL with authentication if provided
-    if username and password:
-        base_url = f"http://{username}:{password}@{ip_address}/cm"
-    else:
-        base_url = f"http://{ip_address}/cm"
+    # Get DNS name if available
+    dns_name = get_dns_name(ip_address)
+    if dns_name:
+        logger.debug(f"{ip_address}: DNS name: {dns_name}")
     
-    # Command parameters to get status
-    params = {"cmnd": "Status 2"}
+    result = {
+        'success': False,
+        'message': '',
+        'current_version': 'Unknown',
+        'latest_version': 'Unknown',
+        'dns_name': dns_name
+    }
     
-    try:
-        logger.debug(f"{ip_address}: Requesting firmware version information")
-        response = requests.get(base_url, params=params, timeout=5)
-        
-        if response.status_code == 200:
-            try:
-                data = response.json()
-                if 'StatusFWR' in data:
-                    fw_data = data['StatusFWR']
-                    version = fw_data.get('Version', 'Unknown')
-                    
-                    # Extract core and SDK versions if available
-                    core_version = fw_data.get('Core', 'Unknown')
-                    sdk_version = fw_data.get('SDK', 'Unknown')
-                    
-                    # Check if it's a minimal version (tasmota-minimal)
-                    is_minimal = 'minimal' in version.lower() if version != 'Unknown' else False
-                    
-                    logger.debug(f"{ip_address}: Firmware version: {version}, Core: {core_version}, SDK: {sdk_version}")
-                    
-                    return {
-                        'version': version,
-                        'core_version': core_version,
-                        'sdk_version': sdk_version,
-                        'is_minimal': is_minimal
-                    }
-                else:
-                    logger.warning(f"{ip_address}: StatusFWR not found in device response")
-            except ValueError:
-                logger.warning(f"{ip_address}: Invalid JSON response from device")
-        else:
-            logger.warning(f"{ip_address}: Failed to get firmware version. Status code: {response.status_code}")
+    # In dry run mode, just check if the device is reachable
+    if dry_run:
+        try:
+            logger.info(f"{ip_address}: Checking device connectivity (DRY RUN)")
+            response = requests.get(f"http://{ip_address}", timeout=5)
+            logger.info(f"{ip_address}: Device is reachable, status code: {response.status_code} (DRY RUN)")
+            result['success'] = True
+            result['message'] = f"Device is reachable (DRY RUN)"
+            return True, result
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"{ip_address}: Device is not reachable: {e} (DRY RUN)")
+            result['message'] = f"Device is not reachable (DRY RUN)"
+            return False, result
     
-    except requests.exceptions.RequestException as e:
-        logger.error(f"{ip_address}: Error connecting to device: {e}")
+    # Get current firmware version
+    firmware_info = get_device_firmware_version(ip_address, username, password)
+    if not firmware_info:
+        result['message'] = "Could not determine current firmware version"
+        return False, result
     
-    return None
-
-
-def fetch_latest_tasmota_release():
-    """
-    Fetch information about the latest official Tasmota release from GitHub
+    result['current_version'] = firmware_info['version']
     
-    Returns:
-        dict: Dictionary containing release information or None if failed
-              Keys: 'version', 'release_date', 'release_notes', 'download_url'
-    """
-    logger = logging.getLogger()
-    github_api_url = "https://api.github.com/repos/arendst/Tasmota/releases/latest"
+    # Get latest release information if not provided
+    if not latest_release_info:
+        latest_release_info = fetch_latest_tasmota_release()
+        if not latest_release_info:
+            result['message'] = "Could not fetch latest release information"
+            return False, result
     
-    try:
-        logger.debug("Fetching latest Tasmota release information from GitHub")
-        response = requests.get(github_api_url, timeout=10)
-        
-        if response.status_code == 200:
-            release_data = response.json()
-            
-            # Extract version (remove 'v' prefix if present)
-            version = release_data.get('tag_name', '')
-            if version.startswith('v'):
-                version = version[1:]
-            
-            # Extract release date and convert to datetime object
-            release_date_str = release_data.get('published_at', '')
-            try:
-                release_date = datetime.strptime(release_date_str, "%Y-%m-%dT%H:%M:%SZ")
-                release_date_formatted = release_date.strftime("%Y-%m-%d")
-            except ValueError:
-                release_date_formatted = "Unknown"
-            
-            # Extract release notes (body)
-            release_notes = release_data.get('body', 'No release notes available')
-            
-            # Extract download URL for the binary
-            download_url = None
-            assets = release_data.get('assets', [])
-            for asset in assets:
-                if asset.get('name', '').lower().endswith('.bin') and 'tasmota.bin' in asset.get('name', '').lower():
-                    download_url = asset.get('browser_download_url')
-                    break
-            
-            logger.info(f"Latest Tasmota release: {version} (released on {release_date_formatted})")
-            
-            return {
-                'version': version,
-                'release_date': release_date_formatted,
-                'release_notes': release_notes,
-                'download_url': download_url
-            }
-        else:
-            logger.error(f"Failed to fetch latest release info. Status code: {response.status_code}")
+    result['latest_version'] = latest_release_info['version']
     
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error connecting to GitHub API: {e}")
-    except (ValueError, KeyError) as e:
-        logger.error(f"Error parsing GitHub API response: {e}")
+    # Check if update is needed
+    needs_update = compare_versions(firmware_info['version'], latest_release_info['version'])
     
-    return None
+    # Skip if already up to date and skip_up_to_date is True
+    if not needs_update and skip_up_to_date:
+        logger.info(f"{ip_address}: Already running latest version {firmware_info['version']}, skipping")
+        result['success'] = True
+        result['message'] = f"Already running latest version {firmware_info['version']}"
+        return True, result
+    
+    # Use the update_device_firmware function from the imported module
+    update_result = update_device_firmware(ip_address, username, password)
+    
+    # Update the result with the update_result information
+    result.update(update_result)
+    
+    return update_result['success'], result
 
 
 def compare_versions(device_version, latest_version):

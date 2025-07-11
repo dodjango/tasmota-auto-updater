@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tasmota Updater</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script defer src="https://unpkg.com/alpinejs@3.12.0/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div x-data="tasmotaApp()" x-init="init()">
+        <nav class="navbar is-primary" role="navigation" aria-label="main navigation">
+            <div class="navbar-brand">
+                <a class="navbar-item" href="/">
+                    <img src="{{ url_for('static', filename='images/tasmota-logo.png') }}" alt="Tasmota Logo" width="112" height="28">
+                    <span class="has-text-weight-bold ml-2">Tasmota Updater</span>
+                </a>
+            </div>
+            
+            <div class="navbar-menu">
+                <div class="navbar-end">
+                    <div class="navbar-item">
+                        <div class="buttons">
+                            <button @click="refreshDevices()" class="button is-light" :class="{'is-loading': isLoading}">
+                                <span class="icon"><i class="fas fa-sync-alt"></i></span>
+                                <span>Refresh</span>
+                            </button>
+                            <button @click="checkAllDevices()" class="button is-info" :class="{'is-loading': isCheckingAll}">
+                                <span class="icon"><i class="fas fa-search"></i></span>
+                                <span>Check All</span>
+                            </button>
+                            <button @click="confirmUpdateAll()" class="button is-warning" :disabled="isUpdatingAll || !hasUpdatableDevices">
+                                <span class="icon"><i class="fas fa-upload"></i></span>
+                                <span>Update All</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <section class="section">
+            <div class="container">
+                <h1 class="title">Tasmota Device Manager</h1>
+                <h2 class="subtitle">Monitor and update your Tasmota devices</h2>
+                
+                <!-- Latest release info -->
+                <div class="box" x-show="latestRelease">
+                    <h3 class="title is-5">Latest Tasmota Release</h3>
+                    <div class="columns">
+                        <div class="column">
+                            <p><strong>Version:</strong> <span x-text="latestRelease.version"></span></p>
+                            <p><strong>Release Date:</strong> <span x-text="latestRelease.release_date"></span></p>
+                        </div>
+                        <div class="column">
+                            <a :href="latestRelease.download_url" class="button is-small is-link" target="_blank">
+                                <span class="icon"><i class="fas fa-download"></i></span>
+                                <span>Download Binary</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Loading indicator -->
+                <div class="has-text-centered my-6" x-show="isLoading">
+                    <span class="icon is-large">
+                        <i class="fas fa-spinner fa-pulse fa-2x"></i>
+                    </span>
+                    <p class="mt-2">Loading devices...</p>
+                </div>
+                
+                <!-- Error message -->
+                <div class="notification is-danger" x-show="error">
+                    <button class="delete" @click="error = ''"></button>
+                    <p x-text="error"></p>
+                </div>
+                
+                <!-- No devices message -->
+                <div class="notification is-info" x-show="!isLoading && devices.length === 0 && !error">
+                    <p>No devices found. Please add devices to your configuration file.</p>
+                </div>
+                
+                <!-- Devices list -->
+                <div class="columns is-multiline">
+                    <template x-for="device in devices" :key="device.ip">
+                        <div class="column is-one-third">
+                            <div class="card">
+                                <header class="card-header">
+                                    <p class="card-header-title">
+                                        <span x-text="device.ip"></span>
+                                        <span x-show="device.dns_name" class="tag is-info is-light ml-2" x-text="device.dns_name"></span>
+                                    </p>
+                                </header>
+                                <div class="card-content">
+                                    <div class="content">
+                                        <template x-if="device.status">
+                                            <div>
+                                                <p><strong>Current Version:</strong> <span x-text="device.status.version || 'Unknown'"></span></p>
+                                                <p><strong>Core Version:</strong> <span x-text="device.status.core_version || 'Unknown'"></span></p>
+                                                <p><strong>SDK Version:</strong> <span x-text="device.status.sdk_version || 'Unknown'"></span></p>
+                                                
+                                                <div class="tags mt-2">
+                                                    <span x-show="device.status.is_minimal" class="tag is-warning">Minimal</span>
+                                                    <span x-show="device.update_status && device.update_status.needs_update" class="tag is-danger">Update Available</span>
+                                                    <span x-show="device.update_status && !device.update_status.needs_update" class="tag is-success">Up to Date</span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template x-if="!device.status">
+                                            <div>
+                                                <p class="has-text-grey">Status not available</p>
+                                                <button @click="checkDevice(device)" class="button is-small is-info mt-2" :class="{'is-loading': device.isChecking}">
+                                                    Check Status
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                                <footer class="card-footer">
+                                    <a @click="checkDevice(device)" class="card-footer-item" :class="{'is-loading': device.isChecking}">
+                                        <span class="icon"><i class="fas fa-sync-alt"></i></span>
+                                        <span>Check</span>
+                                    </a>
+                                    <a @click="confirmUpdateDevice(device)" class="card-footer-item" :disabled="!device.update_status || !device.update_status.needs_update || device.isUpdating">
+                                        <span class="icon"><i class="fas fa-upload"></i></span>
+                                        <span>Update</span>
+                                    </a>
+                                </footer>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Update confirmation modal -->
+        <div class="modal" :class="{'is-active': showUpdateModal}">
+            <div class="modal-background" @click="showUpdateModal = false"></div>
+            <div class="modal-card">
+                <header class="modal-card-head">
+                    <p class="modal-card-title">Confirm Update</p>
+                    <button class="delete" aria-label="close" @click="showUpdateModal = false"></button>
+                </header>
+                <section class="modal-card-body">
+                    <p x-show="selectedDevice">
+                        Are you sure you want to update the device at <strong x-text="selectedDevice?.ip"></strong>?
+                    </p>
+                    <p x-show="!selectedDevice">
+                        Are you sure you want to update all devices that need updates?
+                    </p>
+                    <p class="mt-2">
+                        This will initiate the firmware update process and the device(s) will restart.
+                    </p>
+                </section>
+                <footer class="modal-card-foot">
+                    <button class="button is-warning" @click="updateConfirmed()">Update</button>
+                    <button class="button" @click="showUpdateModal = false">Cancel</button>
+                </footer>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

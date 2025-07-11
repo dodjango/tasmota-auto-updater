@@ -1,0 +1,94 @@
+/* Tasmota Updater Custom Styles */
+
+/* General styles */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.section {
+    flex-grow: 1;
+}
+
+/* Card styles */
+.card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 0.5em 1em -0.125em rgba(10, 10, 10, 0.2), 0 0 0 1px rgba(10, 10, 10, 0.05);
+    transform: translateY(-2px);
+}
+
+.card-content {
+    flex-grow: 1;
+}
+
+/* Status indicators */
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+}
+
+.status-online {
+    background-color: #48c774;
+}
+
+.status-updating {
+    background-color: #ffdd57;
+    animation: pulse 1.5s infinite;
+}
+
+.status-offline {
+    background-color: #f14668;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Button improvements */
+.card-footer-item {
+    cursor: pointer;
+}
+
+.card-footer-item[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Loading spinner */
+.fa-spinner {
+    animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 768px) {
+    .column.is-one-third {
+        width: 100%;
+    }
+}
