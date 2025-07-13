@@ -15,6 +15,13 @@ function tasmotaApp() {
         showUpdateModal: false,
         selectedDevice: null,
         
+        // Helper functions
+        getDeviceUrl(device) {
+            // Use DNS name if available, otherwise use IP
+            const host = device.dns_name || device.ip;
+            return `http://${host}`;
+        },
+        
         // Computed properties
         get hasUpdatableDevices() {
             return this.devices.some(device => 

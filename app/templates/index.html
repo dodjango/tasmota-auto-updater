@@ -87,10 +87,11 @@
                     <template x-for="device in devices" :key="device.ip">
                         <div class="column is-one-third">
                             <div class="card">
-                                <header class="card-header">
+                                <header class="card-header" @click="window.open(getDeviceUrl(device), '_blank')" style="cursor: pointer;">
                                     <p class="card-header-title">
                                         <span x-text="device.ip"></span>
                                         <span x-show="device.dns_name" class="tag is-info is-light ml-2" x-text="device.dns_name"></span>
+                                        <span class="icon ml-2"><i class="fas fa-external-link-alt"></i></span>
                                     </p>
                                 </header>
                                 <div class="card-content">
