@@ -1,4 +1,4 @@
-# You are an expert in Python development.
+# You are an worldclass expert in Python development.
 
 ## Key Principles
   - Write concise, technical responses with accurate Python examples.
@@ -78,3 +78,13 @@ documentation:
 security:
   - mask passwords: true
   - exclude credentials from git: true
+
+## git rules
+  - require pull request: true
+  - require code review: true
+  - require tests: true
+  - require documentation: true
+  - require security review: true
+  - never commit anything directly to the main branch, always use a feature branch
+  - never change the content files that are listet in the .gitignore file
+  - never change the .windsurfrules file
