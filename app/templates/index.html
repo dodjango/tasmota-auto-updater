@@ -119,9 +119,10 @@
                                     </div>
                                 </div>
                                 <footer class="card-footer">
-                                    <a @click="checkDevice(device)" class="card-footer-item" :class="{'is-loading': device.isChecking}">
-                                        <span class="icon"><i class="fas fa-sync-alt"></i></span>
+                                    <a @click="checkDevice(device)" class="card-footer-item" :class="{'is-loading': device.isChecking, 'has-text-success': device.checkSuccess}" :disabled="device.isChecking">
+                                        <span class="icon"><i class="fas fa-sync-alt" :class="{'fa-spin': device.isChecking}"></i></span>
                                         <span>Check</span>
+                                        <span class="is-size-7 ml-2" x-show="device.lastChecked">(Last: <span x-text="device.lastChecked"></span>)</span>
                                     </a>
                                     <a @click="confirmUpdateDevice(device)" class="card-footer-item" :disabled="!device.update_status || !device.update_status.needs_update || device.isUpdating">
                                         <span class="icon"><i class="fas fa-upload"></i></span>
