@@ -10,7 +10,7 @@ from app.tasmota.updater import (
     fetch_latest_tasmota_release,
     update_device_firmware
 )
-from app.tasmota.utils import load_devices_from_file
+from app.tasmota.utils import load_devices_from_file, resolve_dns_name
 
 
 # Schema definitions for request/response validation
@@ -68,10 +68,16 @@ class DeviceListResource(Resource):
         devices_file = current_app.config.get('DEVICES_FILE', 'devices.yaml')
         devices = load_devices_from_file(devices_file)
         
-        # Remove passwords from response for security
+        # Remove passwords from response for security and add DNS names
         for device in devices:
             if 'password' in device:
                 device['password'] = '********' if device['password'] else None
+            
+            # Try to resolve DNS name for the device
+            if 'ip' in device:
+                dns_name = resolve_dns_name(device['ip'])
+                if dns_name:
+                    device['dns_name'] = dns_name
         
         return jsonify({'devices': devices})
 
