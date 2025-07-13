@@ -172,6 +172,9 @@ class LatestReleaseResource(Resource):
                 download_url:
                   type: string
                   description: Download URL for firmware binary
+                release_url:
+                  type: string
+                  description: URL to the GitHub release page with release notes
           500:
             description: Error fetching release information
         """

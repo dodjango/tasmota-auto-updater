@@ -191,7 +191,8 @@ def fetch_latest_tasmota_release():
                 'version': version,
                 'release_date': release_date_str,
                 'release_notes': release_data['body'],
-                'download_url': download_url
+                'download_url': download_url,
+                'release_url': release_data['html_url']
             }
         else:
             logger.error(f"Failed to fetch latest release. Status code: {response.status_code}")
