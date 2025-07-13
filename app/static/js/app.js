@@ -45,7 +45,9 @@ function tasmotaApp() {
                     status: null,
                     update_status: null,
                     isChecking: false,
-                    isUpdating: false
+                    isUpdating: false,
+                    checkSuccess: false,
+                    lastChecked: null
                 }));
                 
                 // If we have devices, check their status
@@ -199,6 +201,11 @@ function tasmotaApp() {
         async checkAllDevices() {
             this.isCheckingAll = true;
             
+            // Set all devices to checking state
+            this.devices.forEach(device => {
+                device.isChecking = true;
+            });
+            
             try {
                 const response = await fetch('/api/update/all', {
                     method: 'POST',
@@ -215,18 +222,41 @@ function tasmotaApp() {
                 }
                 
                 const result = await response.json();
+                const currentTime = new Intl.DateTimeFormat(navigator.language, {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                }).format(new Date());
                 
                 // Update the status of each device
                 result.results.forEach(updateResult => {
                     const device = this.devices.find(d => d.ip === updateResult.ip);
                     if (device) {
                         device.update_status = updateResult;
+                        device.lastChecked = currentTime;
                     }
                 });
+                
+                // Set success indicator for all devices
+                this.devices.forEach(device => {
+                    device.checkSuccess = true;
+                });
+                
+                // Clear success indicator after delay
+                setTimeout(() => {
+                    this.devices.forEach(device => {
+                        device.checkSuccess = false;
+                    });
+                }, 2000);
+                
             } catch (error) {
                 console.error('Error checking all devices:', error);
                 this.error = `Failed to check devices: ${error.message}`;
             } finally {
+                // Clear checking state for all devices
+                this.devices.forEach(device => {
+                    device.isChecking = false;
+                });
                 this.isCheckingAll = false;
             }
         },
@@ -236,8 +266,24 @@ function tasmotaApp() {
             this.fetchDevices();
         },
         
-        checkDevice(device) {
-            this.fetchDeviceStatus(device);
+        async checkDevice(device) {
+            if (device.isChecking) return; // Prevent multiple simultaneous checks
+            
+            // The fetchDeviceStatus function already handles setting isChecking to true/false
+            await this.fetchDeviceStatus(device);
+            
+            // Add visual feedback when check completes
+            device.lastChecked = new Intl.DateTimeFormat(navigator.language, {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            }).format(new Date());
+            
+            // Optional: Flash a brief success indicator
+            device.checkSuccess = true;
+            setTimeout(() => {
+                device.checkSuccess = false;
+            }, 2000);
         },
         
         confirmUpdateDevice(device) {
