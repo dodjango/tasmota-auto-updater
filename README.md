@@ -52,10 +52,61 @@ This project includes VS Code tasks:
 
 2. **Additional Tasks**: You can also run these tasks manually from the VS Code Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`):
    - `Start Flask Development Server`: Basic Flask server with auto-reload
-   - `Start Enhanced Development Server`: Flask server with enhanced file watching (includes static files)
    - `Setup Development Environment`: Install required dependencies
 
 The development server will automatically reload when code changes are detected, making the development process faster and more efficient.
+
+## 🧪 Development Mode
+
+The application includes a development mode that uses fake devices instead of connecting to real Tasmota devices. This is useful for testing the UI and functionality without needing actual hardware.
+
+### Using Development Mode
+
+You can enable development mode by setting the `DEV_MODE` environment variable to `true` or by using the provided `.env.dev` file:
+
+```bash
+# Use the development environment configuration
+ENV_FILE=.env.dev python app.py
+```
+
+In development mode:
+
+1. The application loads devices from `devices-dev.yaml` instead of `devices.yaml`
+2. No actual API calls are made to physical devices
+3. Fake device information is used for testing all features
+
+### Environment Configuration
+
+The application uses `.env` files for configuration:
+
+- `.env` - Default configuration (production mode)
+- `.env.dev` - Development configuration with fake devices
+
+You can specify which environment file to use with the `ENV_FILE` environment variable:
+
+```bash
+ENV_FILE=.env.dev python app.py
+```
+
+### Configuring Fake Devices
+
+Fake devices are defined in `devices-dev.yaml` with the following structure:
+
+```yaml
+devices:
+  - ip: 192.168.100.101
+    username: admin
+    password: password
+    fake: true
+    dns_name: fake-tasmota-light1.local
+    firmware_info:
+      version: "12.0.2"
+      core_version: "2.7.4.9"
+      sdk_version: "3.0.2"
+      is_minimal: false
+```
+
+You can modify this file to simulate different device configurations and firmware versions.
 
 ## 📚 Documentation
 
@@ -80,5 +131,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Flask](https://flask.palletsprojects.com/) - Web framework
 - [Bulma](https://bulma.io/) - CSS framework
 - [Alpine.js](https://alpinejs.dev/) - JavaScript framework
-
-

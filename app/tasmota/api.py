@@ -10,7 +10,7 @@ from app.tasmota.updater import (
     fetch_latest_tasmota_release,
     update_device_firmware
 )
-from app.tasmota.utils import load_devices_from_file, resolve_dns_name
+from app.tasmota.utils import load_devices_from_file, resolve_dns_name, is_fake_device
 
 
 # Schema definitions for request/response validation
@@ -75,7 +75,7 @@ class DeviceListResource(Resource):
             
             # Try to resolve DNS name for the device
             if 'ip' in device:
-                dns_name = resolve_dns_name(device['ip'])
+                dns_name = resolve_dns_name(device['ip'], device)
                 if dns_name:
                     device['dns_name'] = dns_name
         
@@ -134,7 +134,7 @@ class DeviceStatusResource(Resource):
         # Get device firmware version
         username = device.get('username')
         password = device.get('password')
-        firmware_info = get_device_firmware_version(device_ip, username, password)
+        firmware_info = get_device_firmware_version(device_ip, username, password, device)
         
         if not firmware_info:
             return {'error': 'Failed to get device status'}, 500
@@ -257,8 +257,14 @@ class DeviceUpdateResource(Resource):
         password = request.json.get('password')
         check_only = request.json.get('check_only', False) if request.json.get('check_only') is not None else False
         
+        devices_file = current_app.config.get('DEVICES_FILE', 'devices.yaml')
+        devices = load_devices_from_file(devices_file)
+        
+        # Find the device by IP
+        device = next((d for d in devices if d.get('ip') == device_ip), None)
+        
         # Update device firmware
-        result = update_device_firmware(device_ip, username, password, check_only)
+        result = update_device_firmware(device_ip, username, password, check_only, device)
         
         return jsonify(result)
 
@@ -326,12 +332,9 @@ class AllDevicesUpdateResource(Resource):
           500:
             description: Error updating devices
         """
-        # Load devices from configuration
+        
         devices_file = current_app.config.get('DEVICES_FILE', 'devices.yaml')
         devices = load_devices_from_file(devices_file)
-        
-        if not devices:
-            return {'error': 'No devices found in configuration'}, 404
         
         # Extract parameters
         check_only = request.json.get('check_only', False) if request.json else False
@@ -343,7 +346,8 @@ class AllDevicesUpdateResource(Resource):
                 device['ip'],
                 device.get('username'),
                 device.get('password'),
-                check_only
+                check_only,
+                device
             )
             results.append(result)
         

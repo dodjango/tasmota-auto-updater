@@ -5,10 +5,29 @@ Tasmota Updater Web Application
 A web interface for managing and updating Tasmota devices.
 """
 import os
+import logging
+from pathlib import Path
+from dotenv import load_dotenv
 from flask import Flask, render_template, send_from_directory
 from flask_cors import CORS
 from flasgger import Swagger
 from app.tasmota.api import init_api
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
+
+# Load environment variables from .env file
+env_file = os.environ.get("ENV_FILE", ".env")
+if os.path.exists(env_file):
+    logger.info(f"Loading environment from {env_file}")
+    load_dotenv(env_file)
+else:
+    logger.warning(f"Environment file {env_file} not found, using default values")
 
 def create_app(test_config=None):
     """Create and configure the Flask application"""
@@ -21,6 +40,7 @@ def create_app(test_config=None):
     app.config.from_mapping(
         SECRET_KEY=os.environ.get('SECRET_KEY', 'dev'),
         DEVICES_FILE=os.environ.get('DEVICES_FILE', 'devices.yaml'),
+        DEV_MODE=os.environ.get('DEV_MODE', 'false').lower() in ('true', '1', 't'),
         SWAGGER={
             'title': 'Tasmota Updater API',
             'description': 'API for managing and updating Tasmota devices',
@@ -28,6 +48,12 @@ def create_app(test_config=None):
             'uiversion': 3,
         }
     )
+    
+    # Log the current configuration
+    if app.config['DEV_MODE']:
+        logger.info("Running in DEVELOPMENT MODE")
+    
+    logger.info(f"Using devices file: {app.config['DEVICES_FILE']}")
 
     # Enable CORS
     CORS(app)
@@ -55,4 +81,9 @@ def create_app(test_config=None):
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    host = os.environ.get('HOST', '0.0.0.0')
+    port = int(os.environ.get('PORT', 5001))
+    debug = os.environ.get('FLASK_DEBUG', 'false').lower() in ('true', '1', 't')
+    
+    logger.info(f"Starting server on {host}:{port} (debug={debug})")
+    app.run(debug=debug, host=host, port=port)
