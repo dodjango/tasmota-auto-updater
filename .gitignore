@@ -21,6 +21,10 @@ build/
 update_log.txt
 logs/
 
+# Cache files
+app/tasmota/cache/
+*.json.cache
+
 # Local configuration
 .env
 .env.local
