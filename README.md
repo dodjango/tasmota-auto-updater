@@ -44,6 +44,19 @@ python app.py
 
 Then visit http://localhost:5001 in your browser.
 
+## 🔄 Development with VS Code
+
+This project includes VS Code tasks:
+
+1. **Automatic Development Server**: The Flask development server starts automatically when you open the project in VS Code.
+
+2. **Additional Tasks**: You can also run these tasks manually from the VS Code Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`):
+   - `Start Flask Development Server`: Basic Flask server with auto-reload
+   - `Start Enhanced Development Server`: Flask server with enhanced file watching (includes static files)
+   - `Setup Development Environment`: Install required dependencies
+
+The development server will automatically reload when code changes are detected, making the development process faster and more efficient.
+
 ## 📚 Documentation
 
 - [Installation Guide](docs/installation.md)
