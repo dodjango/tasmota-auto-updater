@@ -10,7 +10,9 @@
             ],
             "options": {
                 "env": {
-                    "FLASK_DEBUG": "1"
+                    "FLASK_DEBUG": "1",
+                    "ENV_FILE": ".env.dev",
+                    "DEV_MODE": "true"
                 }
             },
             "group": {
@@ -28,22 +30,6 @@
             }
         },
         {
-            "label": "Start Enhanced Development Server",
-            "type": "shell",
-            "command": "python3",
-            "args": [
-                "-c",
-                "import os, sys, subprocess; extra_dirs = ['app/static', 'app/templates']; extra_files = [os.path.join(root, file) for dir in extra_dirs for root, _, files in os.walk(dir) for file in files]; env = os.environ.copy(); env['FLASK_DEBUG'] = '1'; env['FLASK_RUN_EXTRA_FILES'] = ';'.join(extra_files); subprocess.run([sys.executable, 'app.py'], env=env)"
-            ],
-            "group": "build",
-            "presentation": {
-                "reveal": "always",
-                "panel": "new",
-                "focus": true
-            },
-            "problemMatcher": []
-        },
-        {
             "label": "Setup Development Environment",
             "type": "shell",
             "command": "${command:python.interpreterPath}",
@@ -58,6 +44,29 @@
             "presentation": {
                 "reveal": "always",
                 "panel": "new"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Start Production Server",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "app.py"
+            ],
+            "options": {
+                "env": {
+                    "ENV_FILE": ".env",
+                    "DEV_MODE": "false",
+                    "FLASK_DEBUG": "0",
+                    "HOST": "0.0.0.0"
+                }
+            },
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
             },
             "problemMatcher": []
         }

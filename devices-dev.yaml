@@ -1,0 +1,31 @@
+devices:
+  - ip: 192.168.100.101
+    username: admin
+    password: password
+    fake: true
+    dns_name: fake-tasmota-light1.local
+    firmware_info:
+      version: "12.0.2"
+      core_version: "2.7.4.9"
+      sdk_version: "3.0.2"
+      is_minimal: false
+  - ip: 192.168.100.102
+    username: admin
+    password: password
+    fake: true
+    dns_name: fake-tasmota-switch1.local
+    firmware_info:
+      version: "11.1.0"
+      core_version: "2.7.4.9"
+      sdk_version: "3.0.2"
+      is_minimal: false
+  - ip: 192.168.100.103
+    username: admin
+    password: password
+    fake: true
+    dns_name: fake-tasmota-plug1.local
+    firmware_info:
+      version: "12.0.2(tasmota-minimal)"
+      core_version: "2.7.4.9"
+      sdk_version: "3.0.2"
+      is_minimal: true

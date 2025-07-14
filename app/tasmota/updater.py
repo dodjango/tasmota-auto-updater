@@ -14,20 +14,27 @@ import json
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
+from app.tasmota.utils import is_fake_device
 
 # Setup module logger
 logger = logging.getLogger(__name__)
 
 
-def get_dns_name(ip_address):
+def get_dns_name(ip_address, device=None):
     """
     Try to get the DNS name for an IP address
     
     Args:
         ip_address (str): IP address to lookup
+        device (dict, optional): Device configuration dictionary
     Returns:
         str: DNS name if found, otherwise None
     """
+    # If this is a fake device with a pre-configured DNS name, use that
+    if device and is_fake_device(device) and 'dns_name' in device:
+        return device['dns_name']
+    
+    # For real devices, try to resolve the DNS name
     try:
         dns_name = socket.getfqdn(ip_address)
         if dns_name != ip_address:
@@ -37,7 +44,7 @@ def get_dns_name(ip_address):
     return None
 
 
-def get_device_firmware_version(ip_address, username=None, password=None):
+def get_device_firmware_version(ip_address, username=None, password=None, device=None):
     """
     Get the current firmware version from a Tasmota device
     
@@ -45,12 +52,29 @@ def get_device_firmware_version(ip_address, username=None, password=None):
         ip_address (str): IP address of the device
         username (str, optional): Username for authentication
         password (str, optional): Password for authentication
+        device (dict, optional): Complete device configuration dictionary
     
     Returns:
         dict: Dictionary containing version information or None if failed
               Keys: 'version', 'core_version', 'sdk_version', 'is_minimal'
     """
     
+    # Check if this is a fake device with pre-configured firmware info
+    if device and is_fake_device(device):
+        if 'firmware_info' in device:
+            logger.debug(f"{ip_address}: Using pre-configured firmware info for fake device")
+            return device['firmware_info']
+        else:
+            logger.warning(f"{ip_address}: Fake device has no firmware_info configured")
+            # Return a default fake version
+            return {
+                'version': '12.0.0',
+                'core_version': '2.7.4.9',
+                'sdk_version': '3.0.2',
+                'is_minimal': False
+            }
+    
+    # For real devices, proceed with the API call
     # Construct base URL with authentication if provided
     if username and password:
         base_url = f"http://{username}:{password}@{ip_address}/cm"
@@ -291,7 +315,7 @@ def fetch_latest_tasmota_release():
     return None
 
 
-def update_device_firmware(device_ip, username=None, password=None, check_only=False):
+def update_device_firmware(device_ip, username=None, password=None, check_only=False, device=None):
     """
     Update firmware on a single Tasmota device
     
@@ -311,11 +335,11 @@ def update_device_firmware(device_ip, username=None, password=None, check_only=F
         "current_version": "Unknown",
         "latest_version": "Unknown",
         "needs_update": False,
-        "dns_name": get_dns_name(device_ip)
+        "dns_name": get_dns_name(device_ip, device)
     }
     
     # Get current firmware version
-    firmware_info = get_device_firmware_version(device_ip, username, password)
+    firmware_info = get_device_firmware_version(device_ip, username, password, device)
     if not firmware_info:
         result["message"] = "Failed to get current firmware version"
         return result
@@ -339,8 +363,14 @@ def update_device_firmware(device_ip, username=None, password=None, check_only=F
         result["success"] = True
         return result
     
-    if check_only:
-        result["message"] = "Update available"
+    # If only checking version or this is a fake device, return the result without updating
+    if check_only or (device and is_fake_device(device)):
+        if device and is_fake_device(device):
+            result["message"] = "Fake device would need an update, but no actual update will be performed"
+            logger.info(f"{device_ip}: {result['message']}")
+        else:
+            result["message"] = "Update available"
+        
         result["success"] = True
         return result
     

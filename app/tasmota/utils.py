@@ -5,20 +5,27 @@ import os
 import logging
 import socket
 from pathlib import Path
+from typing import Dict, List, Optional, Any, Union
 
 logger = logging.getLogger(__name__)
 
 
-def resolve_dns_name(ip_address: str) -> str:
+def resolve_dns_name(ip_address: str, device: dict = None) -> str:
     """
     Resolve an IP address to its DNS name
     
     Args:
         ip_address (str): The IP address to resolve
+        device (dict, optional): The device configuration dictionary
         
     Returns:
         str: The DNS name if found, None otherwise
     """
+    # If this is a fake device with a pre-configured DNS name, use that
+    if device and is_fake_device(device) and 'dns_name' in device:
+        return device['dns_name']
+        
+    # For real devices, try to resolve the DNS name
     try:
         hostname, _, _ = socket.gethostbyaddr(ip_address)
         return hostname if hostname != ip_address else None
@@ -27,7 +34,7 @@ def resolve_dns_name(ip_address: str) -> str:
         return None
 
 
-def load_devices_from_file(filename):
+def load_devices_from_file(filename: str) -> List[Dict[str, Any]]:
     """
     Load device configurations from a YAML file
     
@@ -77,6 +84,37 @@ def load_devices_from_file(filename):
     except Exception as e:
         logger.error(f"Unexpected error loading devices from {filename}: {e}")
         return []
+
+
+def is_fake_device(device: Dict[str, Any]) -> bool:
+    """
+    Check if a device is a fake (development) device
+    
+    Args:
+        device (dict): Device configuration dictionary
+        
+    Returns:
+        bool: True if the device is fake, False otherwise
+    """
+    return device.get('fake', False) is True
+
+
+def get_device_firmware_info(device: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Get firmware information for a device
+    
+    For fake devices, returns the pre-configured firmware info.
+    For real devices, returns None (should be fetched from the device).
+    
+    Args:
+        device (dict): Device configuration dictionary
+        
+    Returns:
+        dict: Firmware information or None
+    """
+    if is_fake_device(device) and 'firmware_info' in device:
+        return device['firmware_info']
+    return None
 
 
 def setup_logging(log_file=None, log_level=logging.INFO):
