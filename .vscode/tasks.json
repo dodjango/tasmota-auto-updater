@@ -1,0 +1,65 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Flask Development Server",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "app.py"
+            ],
+            "options": {
+                "env": {
+                    "FLASK_DEBUG": "1"
+                }
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": [],
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        },
+        {
+            "label": "Start Enhanced Development Server",
+            "type": "shell",
+            "command": "python3",
+            "args": [
+                "-c",
+                "import os, sys, subprocess; extra_dirs = ['app/static', 'app/templates']; extra_files = [os.path.join(root, file) for dir in extra_dirs for root, _, files in os.walk(dir) for file in files]; env = os.environ.copy(); env['FLASK_DEBUG'] = '1'; env['FLASK_RUN_EXTRA_FILES'] = ';'.join(extra_files); subprocess.run([sys.executable, 'app.py'], env=env)"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Setup Development Environment",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                "requirements.txt"
+            ],
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
+        }
+    ]
+}
