@@ -1,90 +1,91 @@
 # You are an worldclass expert in Python development.
 
 ## Key Principles
-  - Write concise, technical responses with accurate Python examples.
-  - Use functional, declarative programming; avoid classes where possible except for Flask views.
-  - Prefer iteration and modularization over code duplication.
-  - Use descriptive variable names with auxiliary verbs (e.g., is_active, has_permission).
-  - Use lowercase with underscores for directories and files (e.g., blueprints/user_routes.py).
-  - Favor named exports for routes and utility functions.
-  - Use the Receive an Object, Return an Object (RORO) pattern where applicable.
+  * Write concise, technical responses with accurate Python examples.
+  * Use functional, declarative programming; avoid classes where possible except for Flask views.
+  * Prefer iteration and modularization over code duplication.
+  * Use descriptive variable names with auxiliary verbs (e.g., is_active, has_permission).
+  * Use lowercase with underscores for directories and files (e.g., blueprints/user_routes.py).
+  * Favor named exports for routes and utility functions.
+  * Use the Receive an Object, Return an Object (RORO) pattern where applicable.
 
 ## When adding new features
-  - Make sure your feature aligns with the project's purpose
-  - Add appropriate logging using the existing logging framework
-  - Update documentation (README.md) to reflect your changes
-  - Add appropriate error handling
+  * Make sure your feature aligns with the project's purpose
+  * Add appropriate logging using the existing logging framework
+  * Update documentation (README.md) to reflect your changes
+  * Add appropriate error handling
 
 ## When modifying existing code
-  - Maintain backward compatibility when possible
-  - Preserve the existing logging structure
-  - Follow the established coding style
+  * Maintain backward compatibility when possible
+  * Preserve the existing logging structure
+  * Follow the established coding style
 
 ## Coding Standards
-  - Follow PEP 8 style guidelines for Python code
-  - Use meaningful variable and function names
-  - Add docstrings to all functions and classes
-  - Keep functions focused on a single responsibility
-  - Use type hints where appropriate
+  * Follow PEP 8 style guidelines for Python code
+  * Use meaningful variable and function names
+  * Add docstrings to all functions and classes
+  * Keep functions focused on a single responsibility
+  * Use type hints where appropriate
 
 ## Python
-  - Python version: "3.6+"
-  - Use def for function definitions.
-  - Use type hints for all function signatures where possible.
-  - Avoid unnecessary curly braces in conditional statements.
-  - For single-line statements in conditionals, omit curly braces.
-  - Use concise, one-line syntax for simple conditional statements (e.g., if condition: do_something()).
-  - Use uv for dependency management
-  - Virtual environment location: .venv
-  - Requirements file: requirements.txt
-  - Files to exclude from linting:
-    - .venv/
-    - logs/
-    - __pycache__/
+  * Python version: "3.6+"
+  * Use def for function definitions.
+  * Use type hints for all function signatures where possible.
+  * Avoid unnecessary curly braces in conditional statements.
+  * For single-line statements in conditionals, omit curly braces.
+  * Use concise, one-line syntax for simple conditional statements (e.g., if condition: do_something()).
+  * Use uv for dependency management and virtual environment management.
+  * Virtual environment location: .venv
+  * Requirements file: requirements.txt
+  * Files to exclude from linting:
+    * .venv/
+    * logs/
+    * __pycache__/
 
 ## Error Handling and Validation
-  - Prioritize error handling and edge cases:
-    - Handle errors and edge cases at the beginning of functions.
-    - Use early returns for error conditions to avoid deeply nested if statements.
-    - Place the happy path last in the function for improved readability.
-    - Avoid unnecessary else statements; use the if-return pattern instead.
-    - Use guard clauses to handle preconditions and invalid states early.
-    - Implement proper error logging and user-friendly error messages.
-    - Use custom error types or error factories for consistent error handling.
 
-  Performance Optimization
-  - Implement database query optimization techniques (e.g., eager loading, indexing).
-  - Use connection pooling for database connections.
-  - Implement proper database session management.
-  - Use background tasks for time-consuming operations (e.g., Celery with Flask).
+Error handling should be comprehensive and consistent throughout the application. This includes using specific exception types, providing context-rich error messages, and ensuring appropriate logging at the correct severity levels. Input validation should occur early in the processing chain to prevent cascading failures, while custom exception classes can help clarify domain-specific error conditions.
 
-  Testing
-  - Write unit tests using pytest.
-  - Implement test fixtures for database and application setup.
+### Prioritize error handling and edge cases:
+  * Handle errors and edge cases at the beginning of functions.
+  * Use early returns for error conditions to avoid deeply nested if statements.
+  * Place the happy path last in the function for improved readability.
+  * Avoid unnecessary else statements; use the if-return pattern instead.
+  * Use guard clauses to handle preconditions and invalid states early.
+  * Implement proper error logging and user-friendly error messages.
+  * Use custom error types or error factories for consistent error handling.
+
+### Performance Optimization
+  * Implement database query optimization techniques (e.g., eager loading, indexing).
+  * Use connection pooling for database connections.
+  * Implement proper database session management.
+  * Use background tasks for time-consuming operations (e.g., Celery with Flask).
+
+### Testing
+  * Write unit tests using pytest.
+  * Implement test fixtures for database and application setup.
 
 
 ## Testing configuration
 testing:
-  - use pytest: true
-  - coverage threshold: 70
+  * use pytest: true
+  * coverage threshold: 70
 
 ## Documentation requirements
-documentation:
-  - require docstrings: true
-  - require readme: true
-  - require contributing: true
+  * require docstrings: true
+  * require readme: true
+  * require contributing: true
 
 ## Security rules
-security:
-  - mask passwords: true
-  - exclude credentials from git: true
+  * mask passwords: true
+  * exclude credentials from git: true
 
 ## git rules
-  - require pull request: true
-  - require code review: true
-  - require tests: true
-  - require documentation: true
-  - require security review: true
-  - never commit anything directly to the main branch, always use a feature branch
-  - never change the content files that are listet in the .gitignore file
-  - never change the .windsurfrules file
+  * require pull request: true
+  * require code review: true
+  * require tests: true
+  * require documentation: true
+  * require security review: true
+  * never commit anything directly to the main branch, always use a feature branch
+  * never change the content files that are listet in the .gitignore file
+  * never change the .windsurfrules file
