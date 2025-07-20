@@ -13,7 +13,7 @@
     <div x-data="tasmotaApp()" x-init="init()">
         <nav class="navbar is-primary" role="navigation" aria-label="main navigation">
             <div class="navbar-brand">
-                <a class="navbar-item" href="/">
+                <a class="navbar-item" href="/" title="Return to home page">
                     <img src="{{ url_for('static', filename='images/tasmota-logo.png') }}" alt="Tasmota Logo" width="112" height="28">
                     <span class="has-text-weight-bold ml-2">Tasmota Updater</span>
                 </a>
@@ -23,18 +23,18 @@
                 <div class="navbar-end">
                     <div class="navbar-item">
                         <div class="buttons">
-                            <a href="https://github.com/dodjango/tasmota-auto-updater" target="_blank" class="button is-dark is-rounded">
+                            <a href="https://github.com/dodjango/tasmota-auto-updater" target="_blank" class="button is-dark is-rounded" title="Visit the project's GitHub repository">
                                 <span class="icon"><i class="fab fa-github"></i></span>
                             </a>
-                            <button @click="refreshDevices()" class="button is-light" :class="{'is-loading': isLoading}">
+                            <button @click="refreshDevices()" class="button is-light" :class="{'is-loading': isLoading}" title="Refresh the device list and check their current status">
                                 <span class="icon"><i class="fas fa-sync-alt"></i></span>
                                 <span>Refresh</span>
                             </button>
-                            <button @click="checkAllDevices()" class="button is-info" :class="{'is-loading': isCheckingAll}">
+                            <button @click="checkAllDevices()" class="button is-info" :class="{'is-loading': isCheckingAll}" title="Check all devices for available firmware updates">
                                 <span class="icon"><i class="fas fa-search"></i></span>
                                 <span>Check All</span>
                             </button>
-                            <button @click="confirmUpdateAll()" class="button is-warning" :disabled="isUpdatingAll || !hasUpdatableDevices">
+                            <button @click="confirmUpdateAll()" class="button is-warning" :disabled="isUpdatingAll || !hasUpdatableDevices" title="Update all devices that have firmware updates available">
                                 <span class="icon"><i class="fas fa-upload"></i></span>
                                 <span>Update All</span>
                             </button>
@@ -58,7 +58,7 @@
                             <p><strong>Release Date:</strong> <span x-text="latestRelease.release_date"></span></p>
                         </div>
                         <div class="column">
-                            <a :href="latestRelease.download_url" class="button is-small is-link" target="_blank">
+                            <a :href="latestRelease.download_url" class="button is-small is-link" target="_blank" title="Download the latest Tasmota firmware binary file">
                                 <span class="icon"><i class="fas fa-download"></i></span>
                                 <span>Download Binary</span>
                             </a>
@@ -76,7 +76,7 @@
                 
                 <!-- Error message -->
                 <div class="notification is-danger" x-show="error">
-                    <button class="delete" @click="error = ''"></button>
+                    <button class="delete" @click="error = ''" title="Dismiss this error message"></button>
                     <p x-text="error"></p>
                 </div>
                 
@@ -90,7 +90,7 @@
                     <template x-for="device in devices" :key="device.ip">
                         <div class="column is-one-third">
                             <div class="card">
-                                <header class="card-header" @click="window.open(getDeviceUrl(device), '_blank')" style="cursor: pointer;">
+                                <header class="card-header" @click="window.open(getDeviceUrl(device), '_blank')" style="cursor: pointer;" title="Open device web interface in a new tab">
                                     <p class="card-header-title">
                                         <span x-text="device.ip"></span>
                                         <span x-show="device.dns_name" class="tag is-info is-light ml-2" x-text="device.dns_name"></span>
@@ -115,7 +115,7 @@
                                         <template x-if="!device.status">
                                             <div>
                                                 <p class="has-text-grey">Status not available</p>
-                                                <button @click="checkDevice(device)" class="button is-small is-info mt-2" :class="{'is-loading': device.isChecking}">
+                                                <button @click="checkDevice(device)" class="button is-small is-info mt-2" :class="{'is-loading': device.isChecking}" title="Check the current status of this device">
                                                     Check Status
                                                 </button>
                                             </div>
@@ -123,12 +123,12 @@
                                     </div>
                                 </div>
                                 <footer class="card-footer">
-                                    <a @click="checkDevice(device)" class="card-footer-item" :class="{'is-loading': device.isChecking, 'has-text-success': device.checkSuccess}" :disabled="device.isChecking">
+                                    <a @click="checkDevice(device)" class="card-footer-item" :class="{'is-loading': device.isChecking, 'has-text-success': device.checkSuccess}" :disabled="device.isChecking" title="Check if this device needs a firmware update">
                                         <span class="icon"><i class="fas fa-sync-alt" :class="{'fa-spin': device.isChecking}"></i></span>
                                         <span>Check</span>
                                         <span class="is-size-7 ml-2" x-show="device.lastChecked">(Last: <span x-text="device.lastChecked"></span>)</span>
                                     </a>
-                                    <a @click="confirmUpdateDevice(device)" class="card-footer-item" :disabled="!device.update_status || !device.update_status.needs_update || device.isUpdating">
+                                    <a @click="confirmUpdateDevice(device)" class="card-footer-item" :disabled="!device.update_status || !device.update_status.needs_update || device.isUpdating" title="Update this device to the latest firmware version">
                                         <span class="icon"><i class="fas fa-upload"></i></span>
                                         <span>Update</span>
                                     </a>
@@ -146,7 +146,7 @@
             <div class="modal-card">
                 <header class="modal-card-head">
                     <p class="modal-card-title">Confirm Update</p>
-                    <button class="delete" aria-label="close" @click="showUpdateModal = false"></button>
+                    <button class="delete" aria-label="close" @click="showUpdateModal = false" title="Close this dialog without updating"></button>
                 </header>
                 <section class="modal-card-body">
                     <p x-show="selectedDevice">
@@ -160,8 +160,8 @@
                     </p>
                 </section>
                 <footer class="modal-card-foot">
-                    <button class="button is-warning" @click="updateConfirmed()">Update</button>
-                    <button class="button" @click="showUpdateModal = false">Cancel</button>
+                    <button class="button is-warning" @click="updateConfirmed()" title="Confirm and proceed with the firmware update">Update</button>
+                    <button class="button" @click="showUpdateModal = false" title="Cancel and close this dialog">Cancel</button>
                 </footer>
             </div>
         </div>
