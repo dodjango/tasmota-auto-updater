@@ -4,9 +4,9 @@ FROM python:${PYTHON_VERSION}-slim AS builder
 # Set working directory
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies and tini
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc python3-dev && \
+    apt-get install -y --no-install-recommends gcc python3-dev tini && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -19,6 +19,9 @@ RUN python -m venv /opt/venv && \
     find /opt/venv -name '*.pyc' -delete || true && \
     find /opt/venv -name '__pycache__' -delete || true
 
+# Create application directory structure
+RUN mkdir -p /app/logs /app/app/tasmota/cache
+
 ###############################################
 
 # Second stage: runtime image with minimal size
@@ -27,8 +30,11 @@ FROM python:${PYTHON_VERSION}-slim AS runtime
 # Set working directory
 WORKDIR /app
 
-# Copy only the necessary files from the builder stage
+# Copy necessary files from the builder stage
 COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /usr/bin/tini /usr/bin/tini
+COPY --from=builder /app/logs /app/logs
+COPY --from=builder /app/app/tasmota/cache /app/app/tasmota/cache
 
 # Set environment variables in a single layer
 ENV PATH="/opt/venv/bin:$PATH" \
@@ -37,16 +43,12 @@ ENV PATH="/opt/venv/bin:$PATH" \
     HOST=0.0.0.0 \
     PORT=5001
 
-# Copy application code
-COPY . .
+# Copy only necessary application files
+COPY server.py wsgi.py /app/
+COPY app/ /app/app/
 
-# Create necessary directories and set up user in a single layer
-RUN mkdir -p logs app/tasmota/cache && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends tini && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    adduser --disabled-password --gecos "" appuser && \
+# Create non-root user and set permissions
+RUN adduser --disabled-password --gecos "" appuser && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user
