@@ -83,8 +83,3 @@ gh pr create --title "[FEATURE] $(git branch --show-current | sed 's/-/ /g' | se
 If GitHub CLI is not installed, abort.
 
 9 Remove the generated file pr-description.md.
-
-9. After PR creation, provide the PR URL and suggest next steps:
-- Request reviews from team members
-- Address any feedback or comments
-- Monitor CI/CD pipeline for any issues
