@@ -89,3 +89,39 @@ testing:
   * never commit anything directly to the main branch, always use a feature branch
   * never change the content files that are listet in the .gitignore file
   * never change the .windsurfrules file
+  * never commit anything without adding a meaningful commit message
+  * never commit anything without asking me first
+
+## HTML Accessibility and User Experience Standards
+
+### Button Tooltips
+* ALWAYS add descriptive tooltips to ALL interactive elements (buttons, links, icons) using the HTML title attribute
+* Tooltips should clearly explain the action that will occur when the element is clicked
+* Tooltip text should be concise (5-10 words) but informative
+* For buttons that trigger complex actions, include both the action and its consequence
+* For toggle buttons, describe both states (e.g., "Show/Hide details")
+* For icon-only buttons without text labels, tooltips are MANDATORY
+* For buttons that are part of a form, describe what happens after submission
+* For disabled buttons, explain why they are disabled when possible
+* Use consistent terminology across similar actions
+* Ensure tooltips align with any existing documentation
+
+### Tooltip Content Guidelines
+* Use action verbs at the beginning of tooltip text
+* Avoid technical jargon unless the application is for technical users
+* For destructive actions, include a warning in the tooltip
+* For buttons that navigate away from the current page, indicate this
+* For buttons that download files, mention the file type
+* For buttons that open modals or dialogs, mention this behavior
+
+### Implementation Standards
+* Use the HTML title attribute for basic tooltips
+* For more advanced tooltips (with formatting, delays, or positioning), use a consistent tooltip library
+* Ensure tooltips are accessible to screen readers
+* Test tooltips on both desktop and mobile devices
+* Validate that tooltips do not obscure important content when displayed
+
+### Documentation
+* Document the purpose and expected tooltip text for all button types in the codebase
+* Include tooltip text in UI component documentation
+* Review and update tooltips when button functionality changes
