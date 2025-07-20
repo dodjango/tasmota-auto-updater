@@ -47,12 +47,16 @@ SECRET_KEY=mysecretkey DEVICES_FILE=/path/to/mydevices.yaml python app.py
 
 ## Web Application Configuration
 
-The web application's configuration is defined in `app.py`:
+The web application's configuration is defined in `server.py`:
 
 ```python
 app.config.from_mapping(
     SECRET_KEY=os.environ.get('SECRET_KEY', 'dev'),
     DEVICES_FILE=os.environ.get('DEVICES_FILE', 'devices.yaml'),
+    DEV_MODE=os.environ.get('DEV_MODE', 'false').lower() in ('true', '1', 't'),
+    # Security settings
+    SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('true', '1', 't'),
+    SESSION_COOKIE_HTTPONLY=os.environ.get('SESSION_COOKIE_HTTPONLY', 'true').lower() in ('true', '1', 't'),
     SWAGGER={
         'title': 'Tasmota Updater API',
         'description': 'API for managing and updating Tasmota devices',
@@ -60,6 +64,23 @@ app.config.from_mapping(
         'uiversion': 3,
     }
 )
+```
+
+### API Configuration
+
+The application uses Flask-RESTful for creating the API endpoints. The API is configured in the `app/tasmota/api.py` file:
+
+```python
+from flask_restful import Api, Resource
+
+# API initialization
+api = Api(app, prefix='/api')
+
+# Register API endpoints
+api.add_resource(DeviceResource, '/devices/<string:device_id>')
+api.add_resource(DeviceListResource, '/devices')
+api.add_resource(UpdateResource, '/update/<string:device_id>')
+api.add_resource(UpdateAllResource, '/update/all')
 ```
 
 ### Customizing the Web Interface

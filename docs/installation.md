@@ -80,7 +80,7 @@ After installation, you can verify that everything is working correctly by runni
 
 ```bash
 # For the web interface
-python app.py
+python server.py
 
 # For the command-line tool
 python tasmota_updater.py --example

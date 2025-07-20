@@ -13,7 +13,7 @@ source venv/bin/activate  # For standard venv (bash/zsh)
 source .venv/bin/activate  # For uv (bash/zsh)
 
 # Then run the web application
-python app.py
+python server.py
 ```
 
 The web application will be available at http://localhost:5001
