@@ -29,6 +29,7 @@ app/tasmota/cache/
 .env
 .env.local
 devices.yaml
+compose.yml
 
 # IDE specific files
 .idea/

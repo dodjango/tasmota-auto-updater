@@ -1,5 +1,7 @@
 # Container Compose configuration for Tasmota Updater
 # Compatible with both Docker and Podman using Python 3.11-slim optimized image
+#
+# Rename this file to compose.yml before use
 
 services:
   tasmota-updater:
