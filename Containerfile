@@ -19,6 +19,8 @@ RUN python -m venv /opt/venv && \
     find /opt/venv -name '*.pyc' -delete || true && \
     find /opt/venv -name '__pycache__' -delete || true
 
+###############################################
+
 # Second stage: runtime image with minimal size
 FROM python:${PYTHON_VERSION}-slim AS runtime
 
