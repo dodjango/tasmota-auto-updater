@@ -15,7 +15,7 @@ from app.tasmota.api import init_api
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, os.environ.get('LOGGING_LEVEL', 'INFO')),
     format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
@@ -41,6 +41,9 @@ def create_app(test_config=None):
         SECRET_KEY=os.environ.get('SECRET_KEY', 'dev'),
         DEVICES_FILE=os.environ.get('DEVICES_FILE', 'devices.yaml'),
         DEV_MODE=os.environ.get('DEV_MODE', 'false').lower() in ('true', '1', 't'),
+        # Security settings
+        SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('true', '1', 't'),
+        SESSION_COOKIE_HTTPONLY=os.environ.get('SESSION_COOKIE_HTTPONLY', 'true').lower() in ('true', '1', 't'),
         SWAGGER={
             'title': 'Tasmota Updater API',
             'description': 'API for managing and updating Tasmota devices',
@@ -76,6 +79,12 @@ def create_app(test_config=None):
         """Serve the favicon"""
         return send_from_directory(os.path.join(app.root_path, 'app/static/images'),
                                    'favicon.ico', mimetype='image/vnd.microsoft.icon')
+    
+    # Health check endpoint for Docker
+    @app.route('/health')
+    def health():
+        """Health check endpoint for container orchestration"""
+        return {"status": "healthy"}, 200
     
     return app
 

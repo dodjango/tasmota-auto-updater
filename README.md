@@ -26,7 +26,9 @@ Tasmota Remote Updater is a very simple tool that automatically updates multiple
 
 ![Screenshot](docs/images/dashboard.png)
 
-## 🚀 Quick Start
+## 🚀 Web Interface Quick Start
+
+### Local Installation
 
 ```bash
 # Clone the repository
@@ -44,6 +46,56 @@ python app.py
 
 Then visit http://localhost:5001 in your browser.
 
+### Container Installation
+
+The application can be run using either Docker or Podman with identical commands.
+
+#### Using Docker
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/tasmota-updater.git
+cd tasmota-updater
+
+# Build and run with Docker Compose
+docker compose up -d
+```
+
+Or build and run the container manually:
+
+```bash
+# Build the container image
+docker build -f Containerfile -t tasmota-updater .
+
+# Run the container
+docker run -d -p 5001:5001 -v $(pwd)/devices.yaml:/app/devices.yaml -v $(pwd)/logs:/app/logs --name tasmota-updater tasmota-updater
+```
+
+#### Using Podman
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/tasmota-updater.git
+cd tasmota-updater
+
+# Build and run with Podman Compose
+podman-compose up -d
+```
+
+Or build and run the container manually:
+
+```bash
+# Build the container image
+podman build -f Containerfile -t tasmota-updater .
+
+# Run the container
+podman run -d -p 5001:5001 -v $(pwd)/devices.yaml:/app/devices.yaml:Z -v $(pwd)/logs:/app/logs:Z --name tasmota-updater tasmota-updater
+```
+
+> **Note:** The `:Z` suffix on volume mounts is specific to Podman when running on systems with SELinux enabled (like Fedora, RHEL, CentOS). It automatically relabels the content with a private unshared label so the container can access it. Use `:z` (lowercase) instead if you want to share the volume between multiple containers.
+
+Then visit http://localhost:5001 in your browser.
+
 ## 🔄 Development with VS Code
 
 This project includes VS Code tasks:
@@ -55,6 +107,53 @@ This project includes VS Code tasks:
    - `Setup Development Environment`: Install required dependencies
 
 The development server will automatically reload when code changes are detected, making the development process faster and more efficient.
+
+## 🐳 Container Configuration
+
+The application can be run in a container using the provided Containerfile and compose.yml files. Both Docker and Podman are supported for containerization.
+
+### Environment Variables
+
+The application can be configured using environment variables in the `compose.yml` file. For production deployments, the configuration follows these best practices:
+
+```yaml
+environment:
+  - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+  - PORT=5001
+  - HOST=0.0.0.0
+  - DEVICES_FILE=${DEVICES_FILE:-devices.yaml}
+  - DEV_MODE=false
+  - GUNICORN_WORKERS=${GUNICORN_WORKERS:-4}
+  - ENV_FILE=
+```
+
+#### Configuration Best Practices
+
+1. **Variable Substitution**: Values like `${SECRET_KEY:-default-value}` will use the environment variable if set, or fall back to the default value.
+
+2. **External Secrets**: For production, store sensitive values in an external environment file:
+   ```bash
+   # Create a production.env file (not committed to version control)
+   echo "SECRET_KEY=your-secure-production-key" > production.env
+   
+   # Use it when deploying
+   docker compose --env-file ./production.env up -d
+   # OR
+   podman-compose --env-file ./production.env up -d
+   ```
+
+3. **Development vs. Production**: 
+   - For development: Use the `.env` file and set `ENV_FILE=.env`
+   - For production: Use environment variables and set `ENV_FILE=` (empty)
+
+### Volumes
+
+The Docker setup includes two volumes:
+
+- `./devices.yaml:/app/devices.yaml` - Maps your local devices configuration file into the container
+- `./logs:/app/logs` - Maps the logs directory to persist logs outside the container
+
+You can add additional volumes as needed for your specific use case.
 
 ## 🧪 Development Mode
 
