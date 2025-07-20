@@ -30,6 +30,9 @@ env/
 Dockerfile
 docker-compose.yml
 .dockerignore
+Containerfile
+compose.yml
+compose.example.yml
 
 # Logs
 logs/*
@@ -42,3 +45,4 @@ logs/*
 docs/
 README.md
 LICENSE
+CONTRIBUTING.md
