@@ -1,0 +1,52 @@
+site_name: Tasmota Updater
+site_description: Documentation for the Tasmota Auto-Updater project
+site_url: https://github.com/dodjango/tasmota-auto-updater
+
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: indigo
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - footnotes
+  - tables
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Configuration: configuration.md
+  - Usage:
+    - Web Interface: web-interface.md
+    - CLI Usage: cli-usage.md
+    - API: api.md
+  - Container Setup: container-setup.md
+  - Development: development.md
+  - Troubleshooting: troubleshooting.md
+  - Contributing: contributing.md
+
+repo_url: https://github.com/dodjango/tasmota-auto-updater
+repo_name: dodjango/tasmota-auto-updater
+edit_uri: edit/main/docs/
+
+plugins:
+  - search
