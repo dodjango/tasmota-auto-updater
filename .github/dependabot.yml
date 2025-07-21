@@ -42,3 +42,24 @@ updates:
       - "dodjango"
     reviewers:
       - "dodjango"
+
+  - package-ecosystem: "containers"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "09:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 10
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "containers"
+    commit-message:
+      prefix: "containers"
+      include: "scope"
+    assignees:
+      - "dodjango"
+    reviewers:
+      - "dodjango"
+    versioning-strategy: "auto"
