@@ -1,7 +1,6 @@
 # Tasmota Remote Updater
 
-![Tasmota Logo](https://tasmota.github.io/docs/_media/logo.png)
-
+![Screenshot](docs/images/dashboard.png)
 > Keep your Tasmota devices up to date with a single command or click
 
 Tasmota Remote Updater is a tool that automatically updates multiple Tasmota devices to the latest firmware over your network. No more manual updates or complex scripts - just point it at your devices and let it handle the rest.
@@ -11,13 +10,11 @@ Tasmota Remote Updater is a tool that automatically updates multiple Tasmota dev
 
 ## ✨ Features
 
-**Two powerful interfaces in one tool:**
+**Three powerful interfaces in one tool:**
 
 - **Command-Line Interface**: Update multiple devices with a single command
 - **Web Interface**: Modern dashboard with one-click updates and real-time monitoring
 - **RESTful API**: Programmatic access with Swagger documentation
-
-![Screenshot](docs/images/dashboard.png)
 
 ## 🚀 Quick Start
 

@@ -8,7 +8,7 @@ Tasmota Remote Updater is a tool that automatically updates multiple Tasmota dev
 
 ## ✨ Features
 
-**Two powerful interfaces in one tool:**
+**Three powerful interfaces in one tool:**
 
 - **Command-Line Interface**: Update multiple devices with a single command
 - **Web Interface**: Modern dashboard with one-click updates and real-time monitoring
