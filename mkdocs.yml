@@ -33,13 +33,14 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Installation: installation.md
+  - Installation:
+    - Installation: installation.md
+    - Container Setup: container-setup.md
   - Configuration: configuration.md
   - Usage:
     - Web Interface: web-interface.md
     - CLI Usage: cli-usage.md
     - API: api.md
-  - Container Setup: container-setup.md
   - Development: development.md
   - Troubleshooting: troubleshooting.md
   - Contributing: contributing.md
