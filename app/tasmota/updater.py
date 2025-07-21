@@ -12,12 +12,76 @@ import os
 import socket
 import json
 import re
+import ipaddress
 from datetime import datetime, timedelta
 from pathlib import Path
 from app.tasmota.utils import is_fake_device
+from urllib.parse import urlparse
 
 # Setup module logger
 logger = logging.getLogger(__name__)
+
+
+def is_valid_ip_address(ip_address):
+    """
+    Validate if the given string is a valid IP address and not in a reserved range
+    
+    Args:
+        ip_address (str): IP address to validate
+        
+    Returns:
+        bool: True if valid and not in reserved range, False otherwise
+    """
+    try:
+        # Try to create an IPv4Address object
+        ip = ipaddress.ip_address(ip_address)
+        
+        # Check if the IP is in a reserved range
+        if ip.is_loopback or ip.is_multicast or ip.is_reserved or ip.is_link_local:
+            logger.warning(f"IP address {ip_address} is in a reserved range")
+            return False
+            
+        # Check if the IP is private (RFC 1918)
+        if ip.is_private:
+            logger.warning(f"IP address {ip_address} is in a private range")
+            # You might want to allow private IPs in some cases, depending on your use case
+            # For this application, we'll allow private IPs since Tasmota devices are typically on local networks
+            return True
+            
+        return True
+    except ValueError:
+        # Not a valid IP address
+        logger.warning(f"{ip_address} is not a valid IP address")
+        return False
+
+
+def build_device_url(ip_address, username=None, password=None, path="/cm"):
+    """
+    Safely build a URL for a Tasmota device with proper validation
+    
+    Args:
+        ip_address (str): IP address of the device
+        username (str, optional): Username for authentication
+        password (str, optional): Password for authentication
+        path (str, optional): URL path
+        
+    Returns:
+        str: Properly formatted URL or None if invalid
+    """
+    # Validate the IP address
+    if not is_valid_ip_address(ip_address):
+        logger.error(f"Invalid IP address: {ip_address}")
+        return None
+        
+    # Ensure path starts with a slash
+    if not path.startswith('/'):
+        path = '/' + path
+        
+    # Build the URL
+    if username and password:
+        return f"http://{username}:{password}@{ip_address}{path}"
+    else:
+        return f"http://{ip_address}{path}"
 
 
 def get_dns_name(ip_address, device=None):
@@ -76,10 +140,10 @@ def get_device_firmware_version(ip_address, username=None, password=None, device
     
     # For real devices, proceed with the API call
     # Construct base URL with authentication if provided
-    if username and password:
-        base_url = f"http://{username}:{password}@{ip_address}/cm"
-    else:
-        base_url = f"http://{ip_address}/cm"
+    base_url = build_device_url(ip_address, username, password)
+    if not base_url:
+        logger.error(f"Failed to build valid URL for device {ip_address}")
+        return None
     
     # Command parameters to get status
     params = {"cmnd": "Status 2"}
@@ -375,10 +439,10 @@ def update_device_firmware(device_ip, username=None, password=None, check_only=F
         return result
     
     # Construct base URL with authentication if provided
-    if username and password:
-        base_url = f"http://{username}:{password}@{device_ip}/cm"
-    else:
-        base_url = f"http://{device_ip}/cm"
+    base_url = build_device_url(device_ip, username, password)
+    if not base_url:
+        result["message"] = f"Invalid device IP address: {device_ip}"
+        return result
     
     try:
         # Send upgrade command
@@ -399,7 +463,13 @@ def update_device_firmware(device_ip, username=None, password=None, check_only=F
         wait_interval = 5  # Check interval in seconds
         for _ in range(max_wait // wait_interval):
             try:
-                check_response = requests.get(f"http://{device_ip}", timeout=2)
+                # Validate IP and build URL for checking device status
+                device_url = build_device_url(device_ip, path="/")
+                if not device_url:
+                    result["message"] = f"Invalid device IP address: {device_ip}"
+                    return result
+                    
+                check_response = requests.get(device_url, timeout=2)
                 if check_response.status_code == 200:
                     # Device is back online
                     result["success"] = True
