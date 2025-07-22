@@ -1,6 +1,12 @@
 """Tasmota device updater module
 
 Refactored from tasmota_updater.py to be used as a module in the web application.
+
+Security Notes:
+- All sensitive data (passwords, credentials) is sanitized before logging
+- Error messages are sanitized to prevent information disclosure
+- Authentication credentials are not logged
+- Follows OWASP A09:2021 - Security Logging and Monitoring Failures guidelines
 """
 
 import requests
@@ -20,6 +26,35 @@ from urllib.parse import urlparse
 
 # Setup module logger
 logger = logging.getLogger(__name__)
+
+
+def sanitize_log_data(data):
+    """
+    Sanitize sensitive data before logging
+    
+    Args:
+        data (str): Data to sanitize
+        
+    Returns:
+        str: Sanitized data safe for logging
+    """
+    if data is None:
+        return None
+        
+    # Convert to string if not already
+    if not isinstance(data, str):
+        data = str(data)
+    
+    # Mask passwords in URLs (http://user:pass@host)
+    data = re.sub(r'(http[s]?://[^:]+:)([^@]+)(@)', r'\1********\3', data)
+    
+    # Mask passwords in explicit password parameters
+    data = re.sub(r'(["\']password["\']\s*:\s*["\'])([^"\']*)(["\'])', r'\1********\3', data)
+    
+    # Mask any JSON password fields
+    data = re.sub(r'("password"\s*:\s*")([^"]*)(")' , r'\1********\3', data)
+    
+    return data
 
 
 def is_valid_ip_address(ip_address):
@@ -79,6 +114,8 @@ def build_device_url(ip_address, username=None, password=None, path="/cm"):
         
     # Build the URL
     if username and password:
+        # For security, don't log the actual URL with credentials
+        logger.debug(f"Building URL for {ip_address} with authentication")
         return f"http://{username}:{password}@{ip_address}{path}"
     else:
         return f"http://{ip_address}{path}"
@@ -182,7 +219,9 @@ def get_device_firmware_version(ip_address, username=None, password=None, device
             logger.warning(f"{ip_address}: Failed to get firmware version. Status code: {response.status_code}")
     
     except requests.exceptions.RequestException as e:
-        logger.error(f"{ip_address}: Error connecting to device: {e}")
+        # Sanitize error message to avoid leaking sensitive data
+        error_msg = sanitize_log_data(str(e))
+        logger.error(f"{ip_address}: Error connecting to device: {error_msg}")
     
     return None
 
@@ -491,6 +530,8 @@ def update_device_firmware(device_ip, username=None, password=None, check_only=F
         result["message"] = "Update initiated but device did not come back online within timeout period"
         
     except requests.exceptions.RequestException as e:
-        result["message"] = f"Error connecting to device: {e}"
+        # Sanitize error message to avoid leaking sensitive data
+        error_msg = sanitize_log_data(str(e))
+        result["message"] = f"Error connecting to device: {error_msg}"
     
     return result
