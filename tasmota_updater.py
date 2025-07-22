@@ -434,7 +434,7 @@ def update_devices_from_file(filename, dry_run=False, check_only=False, skip_up_
                 if latest_release_info:
                     update_needed = compare_versions(current_version, latest_release_info['version'])
                     if update_needed:
-                        logger.info(f"{device_info}: Update available: {current_version} -> {latest_release_info['version']}")
+                        logger.info(f"{device_info}: Update available: Firmware version update from {current_version} to {latest_release_info['version']}")
                         results[ip] = (True, {
                             'status': 'needs_update',
                             'current_version': current_version,

@@ -20,6 +20,26 @@ from app.tasmota.utils import is_fake_device
 logger = logging.getLogger(__name__)
 
 
+def sanitize_data(data):
+    """
+    Sanitize sensitive information from a dictionary or object.
+    
+    Args:
+        data (dict): The data to sanitize.
+    
+    Returns:
+        dict: A sanitized copy of the data with sensitive fields removed.
+    """
+    if not isinstance(data, dict):
+        return data
+    
+    sanitized = data.copy()
+    sensitive_keys = {'password', 'username', 'token', 'secret'}
+    for key in sensitive_keys:
+        if key in sanitized:
+            sanitized[key] = '***REDACTED***'
+    return sanitized
+
 def get_dns_name(ip_address, device=None):
     """
     Try to get the DNS name for an IP address
