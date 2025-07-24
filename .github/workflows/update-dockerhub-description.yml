@@ -1,0 +1,30 @@
+name: Update Docker Hub Description
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docker-hub-description.md'
+      - '.github/workflows/update-dockerhub-description.yml'
+  workflow_dispatch:
+
+jobs:
+  update-dockerhub-description:
+    name: Update Docker Hub Description
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Update Docker Hub Description
+        uses: peter-evans/dockerhub-description@v4.0.2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: dodjango/tasmota-updater
+          short-description: "Keep your Tasmota devices up to date with a single command or click"
+          readme-filepath: ./docker-hub-description.md
