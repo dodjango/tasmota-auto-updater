@@ -2,11 +2,11 @@
 
 The Tasmota Remote Updater provides a comprehensive REST API that allows you to integrate its functionality into your own applications or automation systems.
 
+> **Note:** This API follows [Semantic Versioning 2.0.0](https://semver.org/). Breaking changes will only be introduced in new major versions.
+
 ## API Overview
 
 The API is built using Flask-RESTful and is documented using Swagger/OpenAPI. You can access the interactive API documentation at http://localhost:5001/apidocs/ when the web application is running.
-
-![Swagger UI](images/swagger.png)
 
 ## Base URL
 
@@ -14,6 +14,23 @@ All API endpoints are relative to the base URL of your Tasmota Remote Updater in
 
 ```
 http://localhost:5001/api/v1
+```
+
+## Version Information
+
+You can retrieve the current version of the API using the version endpoint:
+
+```
+GET /version
+```
+
+Example response:
+
+```json
+{
+  "version": "0.1.0",
+  "name": "Tasmota Updater"
+}
 ```
 
 ## Authentication

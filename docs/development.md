@@ -2,25 +2,52 @@
 
 This guide explains how to set up and work with the Tasmota Remote Updater codebase for development purposes.
 
+## Versioning
+
+This project follows [Semantic Versioning 2.0.0](https://semver.org/). When making changes to the codebase, consider how your changes impact the version number:
+
+- **MAJOR version**: Increment when you make incompatible API changes
+- **MINOR version**: Increment when you add functionality in a backward-compatible manner
+- **PATCH version**: Increment when you make backward-compatible bug fixes
+
+The version is defined in `app/version.py` and should be updated as part of the release process. When releasing a new version, follow these steps:
+
+1. Update the version in `app/version.py`
+2. Commit the change with a message like "Bump version to x.y.z"
+3. Create a git tag with the version number: `git tag -a vx.y.z -m "Release version x.y.z"`
+4. Push the changes and tag
+
+For more details, see the release workflow: `/release-version`
+
 ## Project Structure
 
 The Tasmota Remote Updater follows a modular structure:
 
 ```
 tasmota-updater/
-├── app/                    # Main application package
-│   ├── __init__.py         # Package initialization
-│   ├── static/             # Static assets (CSS, JS)
-│   ├── templates/          # HTML templates
-│   └── tasmota/            # Tasmota-specific functionality
+├── .github/                # GitHub configuration files
+│   ├── dependabot.yml      # Dependabot configuration
+│   └── workflows/          # GitHub Actions workflows
+│       ├── dependabot-auto-merge.yml  # Auto-merge for Dependabot PRs
+│       ├── publish-container.yml      # Container image publishing
+│       └── update-dockerhub-description.yml  # Update Docker Hub description
+├── .windsurf/             # Windsurf development tools
+│   └── workflows/         # Windsurf workflows
+│       └── release-version.md  # Release workflow
+├── app/                   # Main application package
+│   ├── __init__.py        # Package initialization
+│   ├── static/            # Static assets (CSS, JS)
+│   ├── templates/         # HTML templates
+│   ├── version.py         # Version information (SemVer)
+│   └── tasmota/           # Tasmota-specific functionality
 │       ├── __init__.py
-│       ├── api.py          # API endpoints
-│       ├── updater.py      # Core update functionality
-│       └── utils.py        # Utility functions
-├── docs/                   # Documentation
-├── server.py               # Main application entry point
-├── tasmota_updater.py      # Command-line interface
-└── wsgi.py                 # WSGI entry point for production
+│       ├── api.py         # API endpoints
+│       ├── updater.py     # Core update functionality
+│       └── utils.py       # Utility functions
+├── docs/                  # Documentation
+├── server.py              # Main application entry point
+├── tasmota_updater.py     # Command-line interface
+└── wsgi.py                # WSGI entry point for production
 ```
 
 ## Setting Up the Development Environment
