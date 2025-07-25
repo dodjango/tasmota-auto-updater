@@ -3,10 +3,12 @@
 ![Screenshot](docs/images/dashboard.png)
 > Keep your Tasmota devices up to date with a single command or click
 
-Tasmota Remote Updater is a tool that automatically updates multiple Tasmota devices to the latest firmware over your network. No more manual updates or complex scripts - just point it at your devices and let it handle the rest.
-
+[![Semantic Versioning](https://img.shields.io/badge/semver-2.0.0-brightgreen)](https://semver.org)
 [![Python 3.6+](https://img.shields.io/badge/python-3.6+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Tasmota Remote Updater is a tool that automatically updates multiple Tasmota devices to the latest firmware over your network. No more manual updates or complex scripts - just point it at your devices and let it handle the rest.
+
 
 ## ✨ Features
 
@@ -60,6 +62,7 @@ podman-compose up -d
 - [Container Setup](docs/container-setup.md)
 - [Development Guide](docs/development.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- [Versioning](#versioning)
 
 ## 🤝 Contributing
 
@@ -76,3 +79,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Gunicorn](https://gunicorn.org/) - WSGI HTTP Server for UNIX
 - [Bulma](https://bulma.io/) - CSS framework
 - [Alpine.js](https://alpinejs.dev/) - JavaScript framework
+
+## 📋 Versioning
+
+This project follows [Semantic Versioning 2.0.0](https://semver.org/). Version numbers are in the format MAJOR.MINOR.PATCH:
+
+- **MAJOR**: Incompatible API changes
+- **MINOR**: Backward-compatible new functionality
+- **PATCH**: Backward-compatible bug fixes
+
+You can check the current version via the `/version` API endpoint or by looking at the `app/version.py` file.

@@ -8,10 +8,11 @@ import os
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
-from flask import Flask, render_template, send_from_directory
+from flask import Flask, render_template, send_from_directory, jsonify
 from flask_cors import CORS
 from flasgger import Swagger
 from app.tasmota.api import init_api
+from app.version import __version__
 
 # Setup logging
 logging.basicConfig(
@@ -47,7 +48,7 @@ def create_app(test_config=None):
         SWAGGER={
             'title': 'Tasmota Updater API',
             'description': 'API for managing and updating Tasmota devices',
-            'version': '1.0.0',
+            'version': __version__,
             'uiversion': 3,
         }
     )
@@ -66,6 +67,15 @@ def create_app(test_config=None):
     
     # Initialize API routes
     init_api(app)
+    
+    # Add version endpoint
+    @app.route('/version')
+    def get_version():
+        """Return the application version"""
+        return jsonify({
+            'version': __version__,
+            'name': 'Tasmota Updater'
+        })
     
     # Main route
     @app.route('/')
