@@ -24,7 +24,7 @@ Tasmota Remote Updater is a tool that automatically updates multiple Tasmota dev
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tasmota-updater.git
+git clone https://github.com/dodjango/tasmota-updater.git
 cd tasmota-updater
 
 # Create a virtual environment and install dependencies
@@ -40,9 +40,11 @@ Then visit http://localhost:5001 in your browser.
 
 ### Container Installation
 
+#### Option 1: Build from source
+
 ```bash
 # Clone the repository and run with Docker or Podman
-git clone https://github.com/yourusername/tasmota-updater.git
+git clone https://github.com/dodjango/tasmota-updater.git
 cd tasmota-updater
 
 # Using Docker
@@ -51,6 +53,20 @@ docker compose up -d
 # OR using Podman
 podman-compose up -d
 ```
+
+#### Option 2: Pull from container registry
+
+```bash
+# Pull from Docker Hub
+docker pull dodjango/tasmota-updater:latest
+# OR pull from GitHub Container Registry
+docker pull ghcr.io/dodjango/tasmota-updater:latest
+
+# Run with Docker
+docker run -d -p 5001:5001 \
+  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/logs:/app/logs \
+  --name tasmota-updater dodjango/tasmota-updater:latest
 
 ## 📚 Documentation
 
