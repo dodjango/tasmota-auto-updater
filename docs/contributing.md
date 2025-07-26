@@ -99,6 +99,10 @@ Here are some areas where contributions would be particularly welcome:
 6. **Notifications**: Add email or push notifications for update results
 7. **Dark Mode**: Implement a dark mode theme for the web interface
 8. **Localization**: Add support for multiple languages
+9. **Push Notifications**: Add support for push notifications
+10. **Device Inventory**: Add support for tracking device inventory
+11. **Toggle devices**: Add support for toggling devices on and off
+12. **Bulk actions**: Add support for bulk actions on devices
 
 ## Architecture Overview
 
