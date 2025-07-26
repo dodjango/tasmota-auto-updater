@@ -3,6 +3,8 @@
 venv/
 env/
 ENV/
+env.bak/
+venv.bak/
 
 # Python cache files
 __pycache__/
@@ -12,9 +14,24 @@ __pycache__/
 .Python
 
 # Distribution / packaging
-dist/
+.Python
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
 *.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
 # Logs
 *.log
@@ -35,3 +52,7 @@ compose.yml
 .idea/
 *.swp
 *.swo
+
+# Flask stuff:
+instance/
+.webassets-cache
