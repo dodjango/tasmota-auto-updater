@@ -9,6 +9,8 @@ This guide explains how to run Tasmota Remote Updater in a container using Docke
 
 ## Quick Start
 
+### Option 1: Build from source
+
 The simplest way to run the application in a container is using Docker Compose or Podman Compose:
 
 ```bash
@@ -22,6 +24,38 @@ docker compose up -d
 # OR using Podman
 podman-compose up -d
 ```
+
+### Option 2: Pull from container registry
+
+You can also pull the pre-built image directly from Docker Hub or GitHub Container Registry:
+
+#### Docker Hub
+
+```bash
+# Pull the latest image
+docker pull dodjango/tasmota-updater:latest
+
+# Run the container
+docker run -d -p 5001:5001 \
+  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/logs:/app/logs \
+  --name tasmota-updater dodjango/tasmota-updater:latest
+```
+
+#### GitHub Container Registry
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/dodjango/tasmota-updater:latest
+
+# Run the container
+docker run -d -p 5001:5001 \
+  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/logs:/app/logs \
+  --name tasmota-updater ghcr.io/dodjango/tasmota-updater:latest
+```
+
+> **Note:** You'll need to create a `devices.yaml` file in your current directory before running the container. See the [Configuration Options](configuration.md) documentation for details.
 
 ## Manual Container Setup
 
