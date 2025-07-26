@@ -9,11 +9,13 @@ This guide explains how to run Tasmota Remote Updater in a container using Docke
 
 ## Quick Start
 
+### Option 1: Build from source
+
 The simplest way to run the application in a container is using Docker Compose or Podman Compose:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tasmota-updater.git
+git clone https://github.com/dodjango/tasmota-updater.git
 cd tasmota-updater
 
 # Using Docker
@@ -22,6 +24,38 @@ docker compose up -d
 # OR using Podman
 podman-compose up -d
 ```
+
+### Option 2: Pull from container registry
+
+You can also pull the pre-built image directly from Docker Hub or GitHub Container Registry:
+
+#### Docker Hub
+
+```bash
+# Pull the latest image
+docker pull dodjango/tasmota-updater:latest
+
+# Run the container
+docker run -d -p 5001:5001 \
+  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/logs:/app/logs \
+  --name tasmota-updater dodjango/tasmota-updater:latest
+```
+
+#### GitHub Container Registry
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/dodjango/tasmota-updater:latest
+
+# Run the container
+docker run -d -p 5001:5001 \
+  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/logs:/app/logs \
+  --name tasmota-updater ghcr.io/dodjango/tasmota-updater:latest
+```
+
+> **Note:** You'll need to create a `devices.yaml` file in your current directory before running the container. See the [Configuration Options](configuration.md) documentation for details.
 
 ## Manual Container Setup
 
@@ -85,7 +119,11 @@ environment:
    podman-compose --env-file ./production.env up -d
    ```
 
-3. **Development vs. Production**: 
+3. **Development vs. Production**:
+
+You can either use the . env fule or set the environment variables in the complse configuration.
+
+Recommendation:
    - For development: Use the `.env` file and set `ENV_FILE=.env`
    - For production: Use environment variables and set `ENV_FILE=` (empty)
 
