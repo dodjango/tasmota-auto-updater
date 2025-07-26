@@ -15,7 +15,7 @@ The simplest way to run the application in a container is using Docker Compose o
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tasmota-updater.git
+git clone https://github.com/dodjango/tasmota-updater.git
 cd tasmota-updater
 
 # Using Docker
@@ -119,7 +119,11 @@ environment:
    podman-compose --env-file ./production.env up -d
    ```
 
-3. **Development vs. Production**: 
+3. **Development vs. Production**:
+
+You can either use the . env fule or set the environment variables in the complse configuration.
+
+Recommendation:
    - For development: Use the `.env` file and set `ENV_FILE=.env`
    - For production: Use environment variables and set `ENV_FILE=` (empty)
 
