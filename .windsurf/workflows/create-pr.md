@@ -6,7 +6,7 @@ description: Create a Pull Request for this Feature Branch in GitHub.
 
 1. Check if we are on a feature branch
 ```bash
-git branch --show-currentasdas
+git branch --show-current
 ```
 If the output is "main" or "master", abort the workflow and warn the user that pull requests should only be created from feature branches.
 
@@ -80,6 +80,6 @@ git push -u origin $(git branch --show-current)
 ```bash
 gh pr create --title "[FEATURE] $(git branch --show-current | sed 's/-/ /g' | sed 's/\b\(\w\)/\u\1/g')" --body-file pr-description.md
 ```
-If GitHub CLI is not installed, abort.
+If GitHub CLI is not installed, warn the user and abort.
 
-9 Remove the generated file pr-description.md.
+9. Remove the generated file pr-description.md.

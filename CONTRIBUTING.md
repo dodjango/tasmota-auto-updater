@@ -15,7 +15,7 @@ Thank you for your interest in contributing to the Tasmota Updater project!
 
 ## Coding Guidelines
 
-- Follow PEP 8 style guidelines for Python code
+- Follow [PEP 8](https://peps.python.org/pep-0008/) style guidelines for Python code
 - Use meaningful variable and function names
 - Add docstrings to all functions with parameters and return values
 - Use type hints where appropriate
