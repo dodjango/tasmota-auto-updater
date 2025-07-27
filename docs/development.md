@@ -89,23 +89,21 @@ python server.py
 
 The server will start on http://localhost:5001 by default.
 
-### Using Development Mode with Fake Devices
+### Using Fake Devices for Development
 
-For development without real Tasmota devices, you can use the built-in development mode:
+For development without real Tasmota devices, you can use fake devices:
 
 ```bash
-# Set development mode environment variable
-export DEV_MODE=true
-
-# Or use the development environment file
+# Use the development environment file which points to devices-dev.yaml
 ENV_FILE=.env.dev python server.py
 ```
 
-In development mode:
+When using fake devices:
 
-1. The application loads devices from `devices-dev.yaml` instead of `devices.yaml`
-2. No actual API calls are made to physical devices
-3. Fake device information is used for testing all features
+1. The application loads devices from `devices-dev.yaml` (configured in `.env.dev`) instead of `devices.yaml`
+2. Devices marked as `fake: true` in the configuration will not make actual API calls to physical devices
+3. Simulated responses are used for testing all features, including firmware updates
+4. Updates to fake devices are simulated with a random delay of 2-5 seconds
 
 ### Configuring Fake Devices
 
@@ -116,16 +114,27 @@ devices:
   - ip: 192.168.100.101
     username: admin
     password: password
-    fake: true
+    fake: true                    # This flag marks the device as fake
     dns_name: fake-tasmota-light1.local
-    firmware_info:
-      version: "12.0.2"
-      core_version: "2.7.4.9"
-      sdk_version: "3.0.2"
-      is_minimal: false
+    firmware_info:                # Pre-configured firmware information
+      version: "12.0.2"           # Simulated firmware version
+      core_version: "2.7.4.9"     # Simulated core version
+      sdk_version: "3.0.2"        # Simulated SDK version
+      is_minimal: false           # Whether this is a minimal version
 ```
 
-You can modify this file to simulate different device configurations and firmware versions.
+You can modify this file to simulate different device configurations and firmware versions. The key configuration options are:
+
+- `fake: true` - This is the critical flag that marks a device as fake
+- `firmware_info` - Pre-configured firmware information that will be returned instead of making API calls
+- `dns_name` - Optional DNS name for the fake device
+
+You can create multiple fake devices with different configurations to test various scenarios, such as:
+
+- Devices with outdated firmware that need updates
+- Devices already on the latest firmware
+- Devices with minimal firmware versions
+- Devices with different authentication requirements
 
 ## Environment Configuration
 
