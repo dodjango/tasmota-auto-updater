@@ -19,6 +19,7 @@ import socket
 import json
 import re
 import ipaddress
+import random
 from datetime import datetime, timedelta
 from pathlib import Path
 from app.tasmota.utils import is_fake_device
@@ -90,19 +91,34 @@ def is_valid_ip_address(ip_address):
         return False
 
 
-def build_device_url(ip_address, username=None, password=None, path="/cm"):
+def build_device_url(device_config, path="/cm"):
     """
     Safely build a URL for a Tasmota device with proper validation
     
     Args:
-        ip_address (str): IP address of the device
-        username (str, optional): Username for authentication
-        password (str, optional): Password for authentication
+        device_config (dict or str): Device configuration dictionary containing:
+            - ip (str): IP address of the device
+            - username (str, optional): Username for authentication
+            - password (str, optional): Password for authentication
+            OR a string containing just the IP address
         path (str, optional): URL path
         
     Returns:
         str: Properly formatted URL or None if invalid
     """
+    
+    # Handle the case where device_config is just an IP address string (for backward compatibility)
+    if isinstance(device_config, str):
+        ip_address = device_config
+        username = None
+        password = None
+    elif isinstance(device_config, dict) and 'ip' in device_config:
+        ip_address = device_config['ip']
+        username = device_config.get('username')
+        password = device_config.get('password')
+    else:
+        logger.error("Invalid device configuration: missing IP address")
+        return None
     # Validate the IP address
     if not is_valid_ip_address(ip_address):
         logger.error(f"Invalid IP address: {ip_address}")
@@ -121,19 +137,34 @@ def build_device_url(ip_address, username=None, password=None, path="/cm"):
         return f"http://{ip_address}{path}"
 
 
-def get_dns_name(ip_address, device=None):
+def get_dns_name(device_config):
     """
     Try to get the DNS name for an IP address
     
     Args:
-        ip_address (str): IP address to lookup
-        device (dict, optional): Device configuration dictionary
+        device_config (dict or str): Device configuration dictionary containing:
+            - ip (str): IP address of the device
+            - dns_name (str, optional): Pre-configured DNS name for fake devices
+            OR a string containing just the IP address
     Returns:
         str: DNS name if found, otherwise None
     """
+    
+    # Handle the case where device_config is just an IP address string (for backward compatibility)
+    if isinstance(device_config, str):
+        ip_address = device_config
+        is_fake = False
+        dns_name = None
+    elif isinstance(device_config, dict) and 'ip' in device_config:
+        ip_address = device_config['ip']
+        is_fake = is_fake_device(device_config)
+        dns_name = device_config.get('dns_name')
+    else:
+        logger.error("Invalid device configuration: missing IP address")
+        return None
     # If this is a fake device with a pre-configured DNS name, use that
-    if device and is_fake_device(device) and 'dns_name' in device:
-        return device['dns_name']
+    if is_fake and dns_name:
+        return dns_name
     
     # For real devices, try to resolve the DNS name
     try:
@@ -145,26 +176,37 @@ def get_dns_name(ip_address, device=None):
     return None
 
 
-def get_device_firmware_version(ip_address, username=None, password=None, device=None):
+def get_device_firmware_version(device_config):
     """
     Get the current firmware version from a Tasmota device
     
     Args:
-        ip_address (str): IP address of the device
-        username (str, optional): Username for authentication
-        password (str, optional): Password for authentication
-        device (dict, optional): Complete device configuration dictionary
+        device_config (dict): Device configuration dictionary containing:
+            - ip (str): IP address of the device (required)
+            - username (str, optional): Username for authentication
+            - password (str, optional): Password for authentication
+            - firmware_info (dict, optional): Pre-configured firmware info for fake devices
     
     Returns:
         dict: Dictionary containing version information or None if failed
               Keys: 'version', 'core_version', 'sdk_version', 'is_minimal'
     """
     
+    # Validate required fields in device_config
+    if not device_config or not isinstance(device_config, dict) or 'ip' not in device_config:
+        logger.error("Invalid device configuration: missing IP address")
+        return None
+    
+    # Extract device information
+    ip_address = device_config['ip']
+    username = device_config.get('username')
+    password = device_config.get('password')
+    
     # Check if this is a fake device with pre-configured firmware info
-    if device and is_fake_device(device):
-        if 'firmware_info' in device:
+    if is_fake_device(device_config):
+        if 'firmware_info' in device_config:
             logger.debug(f"{ip_address}: Using pre-configured firmware info for fake device")
-            return device['firmware_info']
+            return device_config['firmware_info']
         else:
             logger.warning(f"{ip_address}: Fake device has no firmware_info configured")
             # Return a default fake version
@@ -177,7 +219,7 @@ def get_device_firmware_version(ip_address, username=None, password=None, device
     
     # For real devices, proceed with the API call
     # Construct base URL with authentication if provided
-    base_url = build_device_url(ip_address, username, password)
+    base_url = build_device_url(device_config)
     if not base_url:
         logger.error(f"Failed to build valid URL for device {ip_address}")
         return None
@@ -418,19 +460,37 @@ def fetch_latest_tasmota_release():
     return None
 
 
-def update_device_firmware(device_ip, username=None, password=None, check_only=False, device=None):
+def update_device_firmware(device_config, check_only=False):
     """
     Update firmware on a single Tasmota device
     
     Args:
-        device_ip (str): IP address of the device
-        username (str, optional): Username for authentication
-        password (str, optional): Password for authentication
+        device_config (dict): Device configuration dictionary containing:
+            - ip (str): IP address of the device (required)
+            - username (str, optional): Username for authentication
+            - password (str, optional): Password for authentication
+            - timeout (int, optional): Custom timeout in seconds for device to come back online (default: 60)
         check_only (bool): If True, only check firmware version without updating
     
     Returns:
         dict: Result information including success status and version details
     """
+    # Validate required fields in device_config
+    if not device_config or not isinstance(device_config, dict) or 'ip' not in device_config:
+        return {
+            "ip": "unknown",
+            "success": False,
+            "message": "Invalid device configuration: missing IP address",
+            "current_version": "Unknown",
+            "latest_version": "Unknown",
+            "needs_update": False
+        }
+    
+    # Extract device information
+    device_ip = device_config['ip']
+    username = device_config.get('username')
+    password = device_config.get('password')
+    
     result = {
         "ip": device_ip,
         "success": False,
@@ -438,11 +498,11 @@ def update_device_firmware(device_ip, username=None, password=None, check_only=F
         "current_version": "Unknown",
         "latest_version": "Unknown",
         "needs_update": False,
-        "dns_name": get_dns_name(device_ip, device)
+        "dns_name": get_dns_name(device_config)
     }
     
     # Get current firmware version
-    firmware_info = get_device_firmware_version(device_ip, username, password, device)
+    firmware_info = get_device_firmware_version(device_config)
     if not firmware_info:
         result["message"] = "Failed to get current firmware version"
         return result
@@ -466,19 +526,27 @@ def update_device_firmware(device_ip, username=None, password=None, check_only=F
         result["success"] = True
         return result
     
-    # If only checking version or this is a fake device, return the result without updating
-    if check_only or (device and is_fake_device(device)):
-        if device and is_fake_device(device):
-            result["message"] = "Fake device would need an update, but no actual update will be performed"
-            logger.info(f"{device_ip}: {result['message']}")
-        else:
-            result["message"] = "Update available"
+    # If only checking version, return the result without updating
+    if check_only:
+        result["message"] = "Update available"
+        result["success"] = True
+        return result
         
+    # Handle fake devices with simulated update delay
+    if device_config and is_fake_device(device_config):
+        # Simulate an update with a random delay between 2-5 seconds
+        random_delay = random.uniform(2, 5)
+        logger.info(f"{device_ip}: Simulating update for fake device with {random_delay:.1f} second delay")
+        
+        # Sleep for the random delay to simulate update time
+        time.sleep(random_delay)
+        
+        result["message"] = f"Fake device updated successfully (simulated in {random_delay:.1f} seconds)"
         result["success"] = True
         return result
     
     # Construct base URL with authentication if provided
-    base_url = build_device_url(device_ip, username, password)
+    base_url = build_device_url(device_config)
     if not base_url:
         result["message"] = f"Invalid device IP address: {device_ip}"
         return result
@@ -498,12 +566,16 @@ def update_device_firmware(device_ip, username=None, password=None, check_only=F
         time.sleep(5)  # Initial wait to allow device to start update
         
         # Check if device comes back online
-        max_wait = 60  # Maximum wait time in seconds
+        # Get custom timeout from device_config if provided, otherwise use default
+        max_wait = device_config.get('timeout', 60)
         wait_interval = 5  # Check interval in seconds
+        
+        # Add timeout info to result
+        result['timeout_seconds'] = max_wait
         for _ in range(max_wait // wait_interval):
             try:
                 # Validate IP and build URL for checking device status
-                device_url = build_device_url(device_ip, path="/")
+                device_url = build_device_url(device_config, path="/")
                 if not device_url:
                     result["message"] = f"Invalid device IP address: {device_ip}"
                     return result
@@ -515,7 +587,7 @@ def update_device_firmware(device_ip, username=None, password=None, check_only=F
                     result["message"] = "Update successful"
                     
                     # Get new firmware version
-                    new_firmware_info = get_device_firmware_version(device_ip, username, password)
+                    new_firmware_info = get_device_firmware_version(device_config)
                     if new_firmware_info:
                         result["current_version"] = new_firmware_info["version"]
                     
@@ -527,7 +599,7 @@ def update_device_firmware(device_ip, username=None, password=None, check_only=F
             time.sleep(wait_interval)
         
         # If we get here, device did not come back online in time
-        result["message"] = "Update initiated but device did not come back online within timeout period"
+        result["message"] = f"Update initiated but device did not come back online within {max_wait} seconds"
         
     except requests.exceptions.RequestException as e:
         # Sanitize error message to avoid leaking sensitive data

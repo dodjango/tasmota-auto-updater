@@ -12,8 +12,20 @@ function tasmotaApp() {
         isCheckingAll: false,
         isUpdatingAll: false,
         error: '',
+        success: '',
         showUpdateModal: false,
         selectedDevice: null,
+        updateProgress: {
+            total: 0,
+            completed: 0,
+            inProgress: 0,
+            failed: 0,
+            percentage: 0
+        },
+        updateSettings: {
+            timeout: parseInt(localStorage.getItem('update_timeout') || '60'),
+            updateOnlyNeeded: localStorage.getItem('update_only_needed') !== 'false'
+        },
         
         // Helper functions
         getDeviceUrl(device) {
@@ -135,6 +147,11 @@ function tasmotaApp() {
         async updateDevice(device) {
             device.isUpdating = true;
             
+            // Set update in progress flags for UI indicator
+            device.update_in_progress = true;
+            device.update_message = 'Starting update...';
+            device.timeout_seconds = parseInt(localStorage.getItem('update_timeout') || '60');
+            
             try {
                 const response = await fetch('/api/update', {
                     method: 'POST',
@@ -156,28 +173,61 @@ function tasmotaApp() {
                 device.update_status = await response.json();
                 
                 if (device.update_status.success) {
-                    // Update was successful, refresh device status after a delay
+                    // Update was successful, set completed status
+                    device.update_completed = true;
+                    device.update_message = device.update_status.message || 'Update completed';
+                    
+                    // Refresh device status after a delay
                     setTimeout(() => this.fetchDeviceStatus(device), 5000);
+                } else {
+                    // Update failed
+                    device.update_message = device.update_status.message || 'Update failed';
                 }
             } catch (error) {
                 console.error(`Error updating ${device.ip}:`, error);
                 this.error = `Failed to update ${device.ip}: ${error.message}`;
+                device.update_message = `Error: ${error.message}`;
             } finally {
                 device.isUpdating = false;
+                device.update_in_progress = false;
             }
         },
         
         async updateAllDevices() {
             this.isUpdatingAll = true;
+            this.updateProgress = {
+                total: 0,
+                completed: 0,
+                inProgress: 0,
+                failed: 0,
+                percentage: 0
+            };
+            
+            // Get user preferences for timeout
+            const timeout = parseInt(localStorage.getItem('update_timeout') || '60');
+            const updateOnlyNeeded = localStorage.getItem('update_only_needed') !== 'false';
             
             try {
+                // First, mark all devices as pending update
+                this.devices.forEach(device => {
+                    if (updateOnlyNeeded && !device.update_status?.needs_update) {
+                        return;
+                    }
+                    device.update_in_progress = true;
+                    device.update_completed = false;
+                    device.update_message = 'Pending update...';
+                    this.updateProgress.total++;
+                });
+                
                 const response = await fetch('/api/update/all', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        check_only: false
+                        check_only: false,
+                        timeout: timeout,
+                        update_only_needed: updateOnlyNeeded
                     })
                 });
                 
@@ -187,19 +237,49 @@ function tasmotaApp() {
                 
                 const result = await response.json();
                 
+                // Update progress information
+                // Get the count of devices that need updates or are being updated
+                this.updateProgress.total = result.summary.needs_update > 0 ? result.summary.needs_update : this.updateProgress.total;
+                
+                this.updateProgress = {
+                    total: this.updateProgress.total, // Use the count of devices that need updates
+                    completed: result.summary.updated,
+                    inProgress: result.results.filter(r => r.update_started && !r.update_completed).length,
+                    failed: result.results.filter(r => r.update_started && !r.success).length,
+                    percentage: this.updateProgress.total > 0 ? 
+                        Math.round((result.summary.updated / this.updateProgress.total) * 100) : 0
+                };
+                
                 // Update the status of each device
                 result.results.forEach(updateResult => {
                     const device = this.devices.find(d => d.ip === updateResult.ip);
                     if (device) {
                         device.update_status = updateResult;
+                        device.update_in_progress = updateResult.update_started && !updateResult.update_completed;
+                        device.update_completed = updateResult.update_completed;
+                        device.update_message = updateResult.message;
+                        
+                        // Add timeout information
+                        if (updateResult.timeout_seconds) {
+                            device.timeout_seconds = updateResult.timeout_seconds;
+                        }
                     }
                 });
+                
+                // Show success message with summary
+                this.success = `Update completed: ${result.summary.updated} devices updated, ` + 
+                              `${result.summary.needs_update - result.summary.updated} devices failed or timed out.`;
                 
                 // Refresh device statuses after a delay
                 setTimeout(() => this.refreshDevices(), 5000);
             } catch (error) {
                 console.error('Error updating all devices:', error);
                 this.error = `Failed to update devices: ${error.message}`;
+                
+                // Reset update progress status for all devices
+                this.devices.forEach(device => {
+                    device.update_in_progress = false;
+                });
             } finally {
                 this.isUpdatingAll = false;
             }
@@ -305,6 +385,10 @@ function tasmotaApp() {
         
         updateConfirmed() {
             this.showUpdateModal = false;
+            
+            // Save update settings to localStorage
+            localStorage.setItem('update_timeout', this.updateSettings.timeout.toString());
+            localStorage.setItem('update_only_needed', this.updateSettings.updateOnlyNeeded.toString());
             
             if (this.selectedDevice) {
                 this.updateDevice(this.selectedDevice);

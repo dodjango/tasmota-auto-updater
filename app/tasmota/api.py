@@ -132,9 +132,7 @@ class DeviceStatusResource(Resource):
             return {'error': 'Device not found'}, 404
         
         # Get device firmware version
-        username = device.get('username')
-        password = device.get('password')
-        firmware_info = get_device_firmware_version(device_ip, username, password, device)
+        firmware_info = get_device_firmware_version(device)
         
         if not firmware_info:
             return {'error': 'Failed to get device status'}, 500
@@ -263,8 +261,24 @@ class DeviceUpdateResource(Resource):
         # Find the device by IP
         device = next((d for d in devices if d.get('ip') == device_ip), None)
         
+        # Create device config dictionary
+        device_config = {
+            'ip': device_ip,
+            'username': username,
+            'password': password
+        }
+        
+        # If we found the device in the config file, merge with any additional settings
+        if device:
+            # Create a copy and update with request parameters
+            device_config = device.copy()
+            if username is not None:
+                device_config['username'] = username
+            if password is not None:
+                device_config['password'] = password
+        
         # Update device firmware
-        result = update_device_firmware(device_ip, username, password, check_only, device)
+        result = update_device_firmware(device_config, check_only)
         
         return jsonify(result)
 
@@ -288,6 +302,14 @@ class AllDevicesUpdateResource(Resource):
                   type: boolean
                   description: Only check if updates are needed
                   default: false
+                timeout:
+                  type: integer
+                  description: Custom timeout in seconds for each device update
+                  default: 60
+                update_only_needed:
+                  type: boolean
+                  description: Only update devices that need updates
+                  default: true
         responses:
           200:
             description: Update results
@@ -317,6 +339,12 @@ class AllDevicesUpdateResource(Resource):
                       needs_update:
                         type: boolean
                         description: Whether an update is needed
+                      update_started:
+                        type: boolean
+                        description: Whether the update was initiated
+                      update_completed:
+                        type: boolean
+                        description: Whether the update completed
                 summary:
                   type: object
                   properties:
@@ -329,6 +357,9 @@ class AllDevicesUpdateResource(Resource):
                     needs_update:
                       type: integer
                       description: Number of devices that need updates
+                    updated:
+                      type: integer
+                      description: Number of devices actually updated
           500:
             description: Error updating devices
         """
@@ -338,24 +369,52 @@ class AllDevicesUpdateResource(Resource):
         
         # Extract parameters
         check_only = request.json.get('check_only', False) if request.json else False
+        custom_timeout = request.json.get('timeout', 60) if request.json else 60
+        update_only_needed = request.json.get('update_only_needed', True) if request.json else True
         
-        # Update all devices
+        # First check which devices need updates
+        if update_only_needed and not check_only:
+            check_results = []
+            for device in devices:
+                # Create a copy of the device config
+                device_config = device.copy()
+                result = update_device_firmware(device_config, check_only=True)
+                check_results.append(result)
+            
+            # Filter devices that need updates
+            devices_to_update = []
+            for i, result in enumerate(check_results):
+                if result.get('needs_update', False):
+                    devices_to_update.append(devices[i])
+        else:
+            devices_to_update = devices
+        
+        # Update devices that need updates
         results = []
-        for device in devices:
-            result = update_device_firmware(
-                device['ip'],
-                device.get('username'),
-                device.get('password'),
-                check_only,
-                device
-            )
+        updated_count = 0
+        
+        for device in devices_to_update:
+            # Create a copy of the device config and add custom timeout
+            device_config = device.copy()
+            device_config['timeout'] = custom_timeout
+            
+            result = update_device_firmware(device_config, check_only)
+            
+            # Add additional status fields
+            result['update_started'] = not check_only and (result.get('needs_update', False) or not update_only_needed)
+            result['update_completed'] = result['success'] and result['update_started']
+            
+            if result['update_completed']:
+                updated_count += 1
+                
             results.append(result)
         
         # Generate summary
         summary = {
-            'total': len(results),
+            'total': len(devices),
             'success': sum(1 for r in results if r['success']),
-            'needs_update': sum(1 for r in results if r['needs_update'])
+            'needs_update': sum(1 for r in results if r.get('needs_update', False)),
+            'updated': updated_count
         }
         
         return jsonify({
