@@ -19,7 +19,6 @@ import socket
 import json
 import re
 import ipaddress
-import random
 from datetime import datetime, timedelta
 from pathlib import Path
 from app.tasmota.utils import is_fake_device
@@ -534,6 +533,9 @@ def update_device_firmware(device_config, check_only=False):
         
     # Handle fake devices with simulated update delay
     if device_config and is_fake_device(device_config):
+        # Import random module only when needed for fake device simulation
+        import random
+        
         # Simulate an update with a random delay between 2-5 seconds
         random_delay = random.uniform(2, 5)
         logger.info(f"{device_ip}: Simulating update for fake device with {random_delay:.1f} second delay")
