@@ -77,8 +77,8 @@ def is_valid_ip_address(ip_address):
             return False
             
         # Check if the IP is private (RFC 1918)
-        if ip.is_private:
-            logger.warning(f"IP address {ip_address} is in a private range")
+        if not ip.is_private:
+            logger.warning(f"IP address {ip_address} is NOT in a private range")
             # You might want to allow private IPs in some cases, depending on your use case
             # For this application, we'll allow private IPs since Tasmota devices are typically on local networks
             return True
