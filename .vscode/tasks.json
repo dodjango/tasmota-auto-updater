@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Start Flask Development Server",
+            "label": "Flask Development Server Development Environment",
             "type": "shell",
             "command": "${command:python.interpreterPath}",
             "args": [
@@ -10,14 +10,37 @@
             ],
             "options": {
                 "env": {
-                    "FLASK_DEBUG": "1",
-                    "ENV_FILE": ".env.dev",
-                    "DEV_MODE": "true"
+                    "ENV_FILE": ".env.dev"
                 }
             },
             "group": {
                 "kind": "build",
                 "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "problemMatcher": [],
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        },
+        {
+            "label": "Flask Development Server Production Environment",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "server.py"
+            ],
+            "options": {
+                "env": {
+                    "ENV_FILE": ".env"
+                }
+            },
+            "group": {
+                "kind": "build"
             },
             "presentation": {
                 "reveal": "always",
@@ -62,9 +85,7 @@
             ],
             "options": {
                 "env": {
-                    "ENV_FILE": ".env",
-                    "DEV_MODE": "false",
-                    "SECRET_KEY": "dev-secret-key"
+                    "ENV_FILE": ".env"
                 }
             },
             "group": "build",

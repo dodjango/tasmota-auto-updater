@@ -99,7 +99,6 @@ environment:
   - PORT=5001
   - HOST=0.0.0.0
   - DEVICES_FILE=${DEVICES_FILE:-devices.yaml}
-  - DEV_MODE=false
   - GUNICORN_WORKERS=${GUNICORN_WORKERS:-4}
   - ENV_FILE=
 ```

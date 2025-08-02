@@ -1,6 +1,7 @@
 ---
 description: Create a new release using Semantic Versioning
 ---
+
 # Release a New Version
 
 This workflow guides you through creating a new release of the Tasmota Updater project using Semantic Versioning with GitHub CLI.
@@ -76,7 +77,9 @@ gh release create vx.y.z --title "Release vx.y.z" --notes "$RELEASE_NOTES"
 # gh release create vx.y.z --title "Release vx.y.z" --generate-notes
 ```
 
-7. Monitor the GitHub Actions workflow that will automatically:
+7. Let the user review the release notes.
+
+8. Monitor the GitHub Actions workflow that will automatically:
 ```bash
 # View the running workflows
 gh workflow list

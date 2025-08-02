@@ -53,7 +53,6 @@ The web application's configuration is defined in `server.py`:
 app.config.from_mapping(
     SECRET_KEY=os.environ.get('SECRET_KEY', 'dev'),
     DEVICES_FILE=os.environ.get('DEVICES_FILE', 'devices.yaml'),
-    DEV_MODE=os.environ.get('DEV_MODE', 'false').lower() in ('true', '1', 't'),
     # Security settings
     SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('true', '1', 't'),
     SESSION_COOKIE_HTTPONLY=os.environ.get('SESSION_COOKIE_HTTPONLY', 'true').lower() in ('true', '1', 't'),

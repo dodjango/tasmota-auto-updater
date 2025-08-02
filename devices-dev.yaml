@@ -16,7 +16,6 @@ devices:
     dns_name: fake-tasmota-switch1.local
     firmware_info:
       version: "11.1.0"
-      core_version: "2.7.4.9"
       sdk_version: "3.0.2"
       is_minimal: false
   - ip: 192.168.100.103
@@ -27,5 +26,13 @@ devices:
     firmware_info:
       version: "12.0.2(tasmota-minimal)"
       core_version: "2.7.4.9"
-      sdk_version: "3.0.2"
       is_minimal: true
+  - ip: 192.168.100.104
+    fake: true
+    dns_name: fake-tasmota-slow-device.local
+    timeout: 120
+    firmware_info:
+      version: "11.0.0"
+      core_version: "2.7.4.9"
+      sdk_version: "3.0.2"
+      is_minimal: false

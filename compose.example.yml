@@ -19,7 +19,6 @@ services:
       - ./logs:/app/logs
       - ./app/tasmota/cache:/app/app/tasmota/cache
     environment:
-      - DEV_MODE=false
       # Use environment variable with fallback
       - DEVICES_FILE=${DEVICES_FILE:-devices.yaml}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
