@@ -82,11 +82,11 @@
                     <h3 class="title is-5">Latest Tasmota Release</h3>
                     <div class="columns">
                         <div class="column">
-                            <p><strong>Version:</strong> <a :href="latestRelease.release_url" target="_blank" class="has-text-link" title="View release notes"><span x-text="latestRelease.version"></span> <i class="fas fa-external-link-alt fa-xs"></i></a></p>
-                            <p><strong>Release Date:</strong> <span x-text="latestRelease.release_date"></span></p>
+                            <p><strong>Version:</strong> <a :href="latestRelease?.release_url" target="_blank" class="has-text-link" title="View release notes"><span x-text="latestRelease?.version"></span> <i class="fas fa-external-link-alt fa-xs"></i></a></p>
+                            <p><strong>Release Date:</strong> <span x-text="latestRelease?.release_date"></span></p>
                         </div>
                         <div class="column">
-                            <a :href="latestRelease.download_url" class="button is-small is-link" target="_blank" title="Download the latest Tasmota firmware binary file">
+                            <a :href="latestRelease?.download_url" class="button is-small is-link" target="_blank" title="Download the latest Tasmota firmware binary file">
                                 <span class="icon"><i class="fas fa-download"></i></span>
                                 <span>Download Binary</span>
                             </a>
