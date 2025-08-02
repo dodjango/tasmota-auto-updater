@@ -23,7 +23,6 @@ function tasmotaApp() {
             percentage: 0
         },
         updateSettings: {
-            timeout: parseInt(localStorage.getItem('update_timeout') || '60'),
             updateOnlyNeeded: localStorage.getItem('update_only_needed') !== 'false'
         },
         
@@ -127,8 +126,6 @@ function tasmotaApp() {
                     },
                     body: JSON.stringify({
                         ip: device.ip,
-                        username: device.username,
-                        password: device.password,
                         check_only: true
                     })
                 });
@@ -150,7 +147,6 @@ function tasmotaApp() {
             // Set update in progress flags for UI indicator
             device.update_in_progress = true;
             device.update_message = 'Starting update...';
-            device.timeout_seconds = parseInt(localStorage.getItem('update_timeout') || '60');
             
             try {
                 const response = await fetch('/api/update', {
@@ -169,6 +165,11 @@ function tasmotaApp() {
                 }
                 
                 device.update_status = await response.json();
+                
+                // Set timeout value from API response
+                if (device.update_status.timeout_seconds) {
+                    device.timeout_seconds = device.update_status.timeout_seconds;
+                }
                 
                 if (device.update_status.success) {
                     // Update was successful, set completed status
@@ -201,8 +202,7 @@ function tasmotaApp() {
                 percentage: 0
             };
             
-            // Get user preferences for timeout
-            const timeout = parseInt(localStorage.getItem('update_timeout') || '60');
+            // Get user preference for update filtering
             const updateOnlyNeeded = localStorage.getItem('update_only_needed') !== 'false';
             
             try {
@@ -224,7 +224,6 @@ function tasmotaApp() {
                     },
                     body: JSON.stringify({
                         check_only: false,
-                        timeout: timeout,
                         update_only_needed: updateOnlyNeeded
                     })
                 });
@@ -385,7 +384,6 @@ function tasmotaApp() {
             this.showUpdateModal = false;
             
             // Save update settings to localStorage
-            localStorage.setItem('update_timeout', this.updateSettings.timeout.toString());
             localStorage.setItem('update_only_needed', this.updateSettings.updateOnlyNeeded.toString());
             
             if (this.selectedDevice) {

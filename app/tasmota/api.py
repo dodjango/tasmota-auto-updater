@@ -282,10 +282,6 @@ class AllDevicesUpdateResource(Resource):
                   type: boolean
                   description: Only check if updates are needed
                   default: false
-                timeout:
-                  type: integer
-                  description: Custom timeout in seconds for each device update
-                  default: 60
                 update_only_needed:
                   type: boolean
                   description: Only update devices that need updates
@@ -349,7 +345,6 @@ class AllDevicesUpdateResource(Resource):
         
         # Extract parameters
         check_only = request.json.get('check_only', False) if request.json else False
-        custom_timeout = request.json.get('timeout', 60) if request.json else 60
         update_only_needed = request.json.get('update_only_needed', True) if request.json else True
         
         # First check which devices need updates
@@ -374,9 +369,8 @@ class AllDevicesUpdateResource(Resource):
         updated_count = 0
         
         for device in devices_to_update:
-            # Create a copy of the device config and add custom timeout
+            # Create a copy of the device config
             device_config = device.copy()
-            device_config['timeout'] = custom_timeout
             
             result = update_device_firmware(device_config, check_only)
             

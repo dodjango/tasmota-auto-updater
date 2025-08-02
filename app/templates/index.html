@@ -146,7 +146,6 @@
                                                             <span class="icon mr-2"><i class="fas fa-sync-alt fa-spin"></i></span>
                                                             <span x-text="device.update_message || 'Updating...'" class="has-text-weight-medium"></span>
                                                         </div>
-                                                        <p class="is-size-7 has-text-grey mt-2">Timeout: <span x-text="device.timeout_seconds || 60"></span> seconds</p>
                                                     </div>
                                                 </div>
                                                 
@@ -209,16 +208,6 @@
                     <!-- Update settings -->
                     <div class="field mt-4" x-show="!selectedDevice">
                         <label class="label">Update Settings</label>
-                        
-                        <div class="field">
-                            <label class="label is-small">Device Timeout (seconds)</label>
-                            <div class="control">
-                                <input class="input" type="number" min="30" max="300" step="10" 
-                                       x-model.number="updateSettings.timeout" 
-                                       title="Maximum time to wait for each device to come back online after update">
-                            </div>
-                            <p class="help">Maximum time to wait for each device to come back online after update</p>
-                        </div>
                         
                         <div class="field">
                             <div class="control">

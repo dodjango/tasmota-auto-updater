@@ -466,7 +466,6 @@ def update_device_firmware(device_config, check_only=False):
             - ip (str): IP address of the device (required)
             - username (str, optional): Username for authentication
             - password (str, optional): Password for authentication
-            - timeout (int, optional): Custom timeout in seconds for device to come back online (default: 60)
         check_only (bool): If True, only check firmware version without updating
     
     Returns:
@@ -493,7 +492,8 @@ def update_device_firmware(device_config, check_only=False):
         "current_version": "Unknown",
         "latest_version": "Unknown",
         "needs_update": False,
-        "dns_name": get_dns_name(device_config)
+        "dns_name": get_dns_name(device_config),
+        "timeout": device_config.get('timeout', 60)
     }
     
     # Get current firmware version
