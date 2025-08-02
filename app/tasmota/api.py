@@ -204,12 +204,6 @@ class DeviceUpdateResource(Resource):
                 ip:
                   type: string
                   description: Device IP address
-                username:
-                  type: string
-                  description: Authentication username
-                password:
-                  type: string
-                  description: Authentication password
                 check_only:
                   type: boolean
                   description: Only check if update is needed
@@ -251,8 +245,6 @@ class DeviceUpdateResource(Resource):
         
         # Extract parameters
         device_ip = request.json['ip']
-        username = request.json.get('username')
-        password = request.json.get('password')
         check_only = request.json.get('check_only', False) if request.json.get('check_only') is not None else False
         
         devices_file = current_app.config.get('DEVICES_FILE', 'devices.yaml')
@@ -261,24 +253,12 @@ class DeviceUpdateResource(Resource):
         # Find the device by IP
         device = next((d for d in devices if d.get('ip') == device_ip), None)
         
-        # Create device config dictionary
-        device_config = {
-            'ip': device_ip,
-            'username': username,
-            'password': password
-        }
-        
         # If we found the device in the config file, merge with any additional settings
         if device:
-            # Create a copy and update with request parameters
-            device_config = device.copy()
-            if username is not None:
-                device_config['username'] = username
-            if password is not None:
-                device_config['password'] = password
-        
-        # Update device firmware
-        result = update_device_firmware(device_config, check_only)
+            # Update device firmware
+            result = update_device_firmware(device, check_only)
+        else:
+            result = {'error': 'Device not found'}, 404
         
         return jsonify(result)
 

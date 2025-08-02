@@ -485,8 +485,6 @@ def update_device_firmware(device_config, check_only=False):
     
     # Extract device information
     device_ip = device_config['ip']
-    username = device_config.get('username')
-    password = device_config.get('password')
     
     result = {
         "ip": device_ip,

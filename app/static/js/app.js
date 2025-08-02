@@ -160,8 +160,6 @@ function tasmotaApp() {
                     },
                     body: JSON.stringify({
                         ip: device.ip,
-                        username: device.username,
-                        password: device.password,
                         check_only: false
                     })
                 });
