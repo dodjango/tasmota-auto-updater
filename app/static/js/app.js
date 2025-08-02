@@ -98,7 +98,9 @@ function tasmotaApp() {
             device.isChecking = true;
             
             try {
-                const response = await fetch(`/api/devices/${device.ip}`);
+                const response = await fetch(`/api/devices/${device.ip}`, {
+                    timeout: device.timeout || 60
+                });
                 if (!response.ok) {
                     throw new Error(`Failed to fetch device status: ${response.statusText}`);
                 }
@@ -146,7 +148,7 @@ function tasmotaApp() {
             
             // Set update in progress flags for UI indicator
             device.update_in_progress = true;
-            device.update_message = 'Starting update...';
+            device.update_message = 'Pending update...';
             
             try {
                 const response = await fetch('/api/update', {

@@ -198,6 +198,7 @@ def get_device_firmware_version(device_config):
     
     # Extract device information
     ip_address = device_config['ip']
+    timeout = device_config.get('timeout', 60)
     
     # Check if this is a fake device with pre-configured firmware info
     if is_fake_device(device_config):
@@ -226,7 +227,7 @@ def get_device_firmware_version(device_config):
     
     try:
         logger.debug(f"{ip_address}: Requesting firmware version information")
-        response = requests.get(base_url, params=params, timeout=5)
+        response = requests.get(base_url, params=params, timeout=timeout)
         
         if response.status_code == 200:
             try:
@@ -548,37 +549,31 @@ def update_device_firmware(device_config, check_only=False):
     if not base_url:
         result["message"] = f"Invalid device IP address: {device_ip}"
         return result
+    timeout = device_config.get('timeout', 60)
     
     try:
         # Send upgrade command
         logger.info(f"{device_ip}: Upgrading to latest official release")
         params = {"cmnd": "Upgrade 1"}
-        response = requests.get(base_url, params=params, timeout=5)
+        response = requests.get(base_url, params=params, timeout=timeout)
         
         if response.status_code != 200:
             result["message"] = f"Failed to send upgrade command. Status code: {response.status_code}"
             return result
         
-        # Wait for device to restart (typically takes 10-30 seconds)
+        # Wait for device to restart (typically takes 10-60 seconds)
         logger.info(f"{device_ip}: Waiting for device to restart and come back online")
         time.sleep(5)  # Initial wait to allow device to start update
         
         # Check if device comes back online
-        # Get custom timeout from device_config if provided, otherwise use default
-        max_wait = device_config.get('timeout', 60)
-        wait_interval = 5  # Check interval in seconds
         
         # Add timeout info to result
-        result['timeout_seconds'] = max_wait
-        for _ in range(max_wait // wait_interval):
+        result['timeout_seconds'] = timeout
+        if timeout < 5:
+            timeout = 5
+        for _ in range(timeout // 5):
             try:
-                # Validate IP and build URL for checking device status
-                device_url = build_device_url(device_config, path="/")
-                if not device_url:
-                    result["message"] = f"Invalid device IP address: {device_ip}"
-                    return result
-                    
-                check_response = requests.get(device_url, timeout=2)
+                check_response = requests.get(base_url, timeout=2)
                 if check_response.status_code == 200:
                     # Device is back online
                     result["success"] = True
@@ -594,10 +589,10 @@ def update_device_firmware(device_config, check_only=False):
                 # Device still not reachable, continue waiting
                 pass
             
-            time.sleep(wait_interval)
+            time.sleep(5)
         
         # If we get here, device did not come back online in time
-        result["message"] = f"Update initiated but device did not come back online within {max_wait} seconds"
+        result["message"] = f"Update initiated but device did not come back online within {timeout} seconds"
         
     except requests.exceptions.RequestException as e:
         # Sanitize error message to avoid leaking sensitive data
