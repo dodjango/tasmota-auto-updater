@@ -198,8 +198,6 @@ def get_device_firmware_version(device_config):
     
     # Extract device information
     ip_address = device_config['ip']
-    username = device_config.get('username')
-    password = device_config.get('password')
     
     # Check if this is a fake device with pre-configured firmware info
     if is_fake_device(device_config):
