@@ -52,7 +52,20 @@ function tasmotaApp() {
             this.error = '';
             
             try {
-                const response = await fetch('/api/devices');
+                // Create an AbortController
+                const controller = new AbortController();
+                const timeoutValue = 60; // Default to 10 seconds for device listing
+                
+                // Set up timeout
+                const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
+                
+                const response = await fetch('/api/devices', {
+                    signal: controller.signal
+                });
+                
+                // Clear timeout since fetch completed
+                clearTimeout(timeoutId);
+                
                 if (!response.ok) {
                     throw new Error(`Failed to fetch devices: ${response.statusText}`);
                 }
@@ -74,7 +87,13 @@ function tasmotaApp() {
                 }
             } catch (error) {
                 console.error('Error fetching devices:', error);
-                this.error = `Failed to load devices: ${error.message}`;
+                
+                if (error.name === 'AbortError') {
+                    console.error(`Device listing request timed out after ${timeoutValue}s`);
+                    this.error = `Failed to load devices: Request timed out after ${timeoutValue}s`;
+                } else {
+                    this.error = `Failed to load devices: ${error.message}`;
+                }
             } finally {
                 this.isLoading = false;
             }
@@ -82,7 +101,20 @@ function tasmotaApp() {
         
         async fetchLatestRelease() {
             try {
-                const response = await fetch('/api/releases/latest');
+                // Create an AbortController
+                const controller = new AbortController();
+                const timeoutValue = 10; // Default to 10 seconds for release info
+                
+                // Set up timeout
+                const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
+                
+                const response = await fetch('/api/releases/latest', {
+                    signal: controller.signal
+                });
+                
+                // Clear timeout since fetch completed
+                clearTimeout(timeoutId);
+                
                 if (!response.ok) {
                     throw new Error(`Failed to fetch latest release: ${response.statusText}`);
                 }
@@ -90,6 +122,9 @@ function tasmotaApp() {
                 this.latestRelease = await response.json();
             } catch (error) {
                 console.error('Error fetching latest release:', error);
+                if (error.name === 'AbortError') {
+                    console.error(`Release info request timed out after ${timeoutValue}s`);
+                }
                 // Don't show an error notification for this, just log it
             }
         },
@@ -98,9 +133,20 @@ function tasmotaApp() {
             device.isChecking = true;
             
             try {
+                // Create an AbortController
+                const controller = new AbortController();
+                const timeoutValue = device.timeout || 60; // Default to 60 seconds
+                
+                // Set up timeout
+                const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
+                
                 const response = await fetch(`/api/devices/${device.ip}`, {
-                    timeout: device.timeout || 60
+                    signal: controller.signal
                 });
+                
+                // Clear timeout since fetch completed
+                clearTimeout(timeoutId);
+                
                 if (!response.ok) {
                     throw new Error(`Failed to fetch device status: ${response.statusText}`);
                 }
@@ -111,6 +157,9 @@ function tasmotaApp() {
                 await this.checkDeviceUpdate(device);
             } catch (error) {
                 console.error(`Error fetching status for ${device.ip}:`, error);
+                if (error.name === 'AbortError') {
+                    console.error(`Request timed out for ${device.ip} after ${device.timeout || 60}s`);
+                }
                 device.status = null;
             } finally {
                 device.isChecking = false;
@@ -119,8 +168,15 @@ function tasmotaApp() {
         
         async checkDeviceUpdate(device) {
             if (!device.status) return;
-            
+            console.log(`Checking update status for ${device.ip}`);
             try {
+                // Create an AbortController
+                const controller = new AbortController();
+                const timeoutValue = device.timeout || 60; // Default to 10 seconds
+                
+                // Set up timeout
+                const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
+                
                 const response = await fetch('/api/update', {
                     method: 'POST',
                     headers: {
@@ -129,8 +185,12 @@ function tasmotaApp() {
                     body: JSON.stringify({
                         ip: device.ip,
                         check_only: true
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                
+                // Clear timeout since fetch completed
+                clearTimeout(timeoutId);
                 
                 if (!response.ok) {
                     throw new Error(`Failed to check update: ${response.statusText}`);
@@ -139,6 +199,9 @@ function tasmotaApp() {
                 device.update_status = await response.json();
             } catch (error) {
                 console.error(`Error checking update for ${device.ip}:`, error);
+                if (error.name === 'AbortError') {
+                    console.error(`Update check timed out for ${device.ip} after ${timeoutValue}s`);
+                }
                 device.update_status = null;
             }
         },
@@ -151,6 +214,13 @@ function tasmotaApp() {
             device.update_message = 'Pending update...';
             
             try {
+                // Create an AbortController
+                const controller = new AbortController();
+                const timeoutValue = device.timeout || 60; // Default to 60 seconds for firmware updates
+                
+                // Set up timeout
+                const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
+                
                 const response = await fetch('/api/update', {
                     method: 'POST',
                     headers: {
@@ -159,8 +229,12 @@ function tasmotaApp() {
                     body: JSON.stringify({
                         ip: device.ip,
                         check_only: false
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                
+                // Clear timeout since fetch completed
+                clearTimeout(timeoutId);
                 
                 if (!response.ok) {
                     throw new Error(`Failed to update device: ${response.statusText}`);
@@ -176,18 +250,30 @@ function tasmotaApp() {
                 if (device.update_status.success) {
                     // Update was successful, set completed status
                     device.update_completed = true;
-                    device.update_message = device.update_status.message || 'Update completed';
-                    
-                    // Refresh device status after a delay
-                    setTimeout(() => this.fetchDeviceStatus(device), 5000);
+                    // if update_status.message is not empty, use it, otherwise use default message, always append "Pending restart..."
+                    device.update_message = device.update_status.message ? device.update_status.message + ', pending restart...' : 'Update completed, pending restart...';
+                    // if it is a fake device, sleep 3 seconds
+                    if (device.fake) {
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                    }
+                    // Check update status again
+                    await this.checkDeviceUpdate(device);
                 } else {
                     // Update failed
                     device.update_message = device.update_status.message || 'Update failed';
                 }
             } catch (error) {
                 console.error(`Error updating ${device.ip}:`, error);
-                this.error = `Failed to update ${device.ip}: ${error.message}`;
-                device.update_message = `Error: ${error.message}`;
+                
+                if (error.name === 'AbortError') {
+                    const timeoutValue = device.timeout || 60;
+                    console.error(`Update timed out for ${device.ip} after ${timeoutValue}s`);
+                    this.error = `Update timed out for ${device.ip} after ${timeoutValue}s`;
+                    device.update_message = `Error: Update timed out after ${timeoutValue}s`;
+                } else {
+                    this.error = `Failed to update ${device.ip}: ${error.message}`;
+                    device.update_message = `Error: ${error.message}`;
+                }
             } finally {
                 device.isUpdating = false;
                 device.update_in_progress = false;
@@ -219,6 +305,13 @@ function tasmotaApp() {
                     this.updateProgress.total++;
                 });
                 
+                // Create an AbortController
+                const controller = new AbortController();
+                const timeoutValue = 60; // Default to 60 seconds for batch updates
+                
+                // Set up timeout
+                const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
+                
                 const response = await fetch('/api/update/all', {
                     method: 'POST',
                     headers: {
@@ -227,8 +320,12 @@ function tasmotaApp() {
                     body: JSON.stringify({
                         check_only: false,
                         update_only_needed: updateOnlyNeeded
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                
+                // Clear timeout since fetch completed
+                clearTimeout(timeoutId);
                 
                 if (!response.ok) {
                     throw new Error(`Failed to update devices: ${response.statusText}`);
@@ -273,7 +370,13 @@ function tasmotaApp() {
                 setTimeout(() => this.refreshDevices(), 5000);
             } catch (error) {
                 console.error('Error updating all devices:', error);
-                this.error = `Failed to update devices: ${error.message}`;
+                
+                if (error.name === 'AbortError') {
+                    console.error(`Batch update operation timed out after ${timeoutValue}s`);
+                    this.error = `Batch update operation timed out after ${timeoutValue}s. Individual device updates may still be in progress.`;
+                } else {
+                    this.error = `Failed to update devices: ${error.message}`;
+                }
                 
                 // Reset update progress status for all devices
                 this.devices.forEach(device => {
@@ -293,6 +396,13 @@ function tasmotaApp() {
             });
             
             try {
+                // Create an AbortController
+                const controller = new AbortController();
+                const timeoutValue = 60; // Default to 60 seconds for batch checks
+                
+                // Set up timeout
+                const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
+                
                 const response = await fetch('/api/update/all', {
                     method: 'POST',
                     headers: {
@@ -300,8 +410,12 @@ function tasmotaApp() {
                     },
                     body: JSON.stringify({
                         check_only: true
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                
+                // Clear timeout since fetch completed
+                clearTimeout(timeoutId);
                 
                 if (!response.ok) {
                     throw new Error(`Failed to check devices: ${response.statusText}`);
@@ -337,7 +451,13 @@ function tasmotaApp() {
                 
             } catch (error) {
                 console.error('Error checking all devices:', error);
-                this.error = `Failed to check devices: ${error.message}`;
+                
+                if (error.name === 'AbortError') {
+                    console.error(`Batch check operation timed out after ${timeoutValue}s`);
+                    this.error = `Batch check operation timed out after ${timeoutValue}s. Some devices may not have been checked.`;
+                } else {
+                    this.error = `Failed to check devices: ${error.message}`;
+                }
             } finally {
                 // Clear checking state for all devices
                 this.devices.forEach(device => {

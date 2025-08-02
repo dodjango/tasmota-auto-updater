@@ -61,9 +61,12 @@ class DeviceListResource(Resource):
                       ip:
                         type: string
                         description: Device IP address
-                      username:
+                      fake:
+                        type: boolean
+                        description: Whether this is a fake device
+                      dns_name:
                         type: string
-                        description: Authentication username
+                        description: Resolved DNS name for the device
         """
         devices_file = current_app.config.get('DEVICES_FILE', 'devices.yaml')
         devices = load_devices_from_file(devices_file)
@@ -78,6 +81,8 @@ class DeviceListResource(Resource):
                 dns_name = resolve_dns_name(device['ip'], device)
                 if dns_name:
                     device['dns_name'] = dns_name
+                else:
+                    device['dns_name'] = device['ip']
         
         return jsonify({'devices': devices})
 
