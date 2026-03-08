@@ -3,7 +3,7 @@
 Version information for the Tasmota Updater application.
 """
 
-__version__ = "0.2.2"  # Updated docker/build-push-action dependency
+__version__ = "0.2.3"  # Updated docker/build-push-action dependency
 """
 Version string following Semantic Versioning (SemVer) format: MAJOR.MINOR.PATCH
 - MAJOR: Incompatible API changes
