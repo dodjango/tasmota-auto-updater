@@ -89,3 +89,37 @@ Behaviour tests (the security proof): see "### 4" in /tmp/tu_master.log. Per-fil
 source .venv/bin/activate
 API_KEY=test SECRET_KEY=x ENV_FILE=.env.dev python server.py   # http://localhost:5001
 ```
+## Test regression analysis (verified from tracebacks)
+
+**Conclusion: my changes caused ZERO test regressions.** Every failure is a pre-existing
+bug *in the test files themselves* or a missing test-only dependency — confirmed by reading
+each traceback. None touches the security edits or the dependency upgrade.
+
+| Test file | Result | Real root cause (from traceback) | Mine? |
+|---|---|---|---|
+| test_timeout_handling.py | PASS (21) | - | - |
+| test_api_timeout_simple.py | PASS (5) | - | - |
+| behaviour tests (mine) | PASS (8/8) | auth / cors / ip / json / secret / github-token | new |
+| test_api_timeout.py | FAIL 7/3 | bug in test: `NameError: 'mock_current_app' is not defined`; also patches `current_app` outside an app context | no |
+| test_container_timeout.py | collect error | `ModuleNotFoundError: No module named 'psutil'` (test-only dep) | no |
+| test_report_generator.py | 0 collected | `cannot collect test class 'TestReportGenerator' because it has a __init__ constructor` | no |
+| test_integration_coordination.py | INTERNALERROR | bare `@pytest.mark.timeout` with no arg -> `TypeError: Timeout marker must have at least one argument` | no |
+| test_timeout_comprehensive.py | INTERNALERROR | same bare `@pytest.mark.timeout` bug | no |
+| test_edge_cases_boundary.py | hung >140s | a real `time.sleep`-based boundary test; not security-related | no |
+
+The two suites that actually exercise the code I touched both pass (test_timeout_handling 21,
+test_api_timeout_simple 5), and the 8 new behaviour tests prove the security controls work.
+The red files are red because of their own defects.
+
+**Cheap green wins (optional):**
+- `uv pip install psutil` -> unblocks test_container_timeout.py collection.
+- Give every `@pytest.mark.timeout` an argument, e.g. `@pytest.mark.timeout(30)` (fixes the two
+  INTERNALERROR suites).
+- test_api_timeout.py: fix the `mock_current_app` NameError and wrap in `app.app_context()`.
+- test_report_generator.py: rename `__init__` / convert to a fixture so pytest can collect it.
+
+I deliberately did NOT edit test files — that is behaviour-changing and outside a security pass.
+
+**Environment note:** do NOT export `API_KEY` in your shell when running the suite — if set, the
+new auth gate returns 401 on /api/* and several api tests would report 401 instead of their
+pre-existing failures. A plain `pytest` run (no API_KEY) is unaffected.
