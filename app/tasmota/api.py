@@ -8,7 +8,8 @@ from flasgger import swag_from
 from app.tasmota.updater import (
     get_device_firmware_version,
     fetch_latest_tasmota_release,
-    update_device_firmware
+    update_device_firmware,
+    is_valid_ip_address,
 )
 from app.tasmota.utils import load_devices_from_file, resolve_dns_name, is_fake_device
 
@@ -27,13 +28,14 @@ class DeviceSchema(Schema):
 
 class DeviceUpdateSchema(Schema):
     """Schema for device update request"""
-    ip = fields.String()
+    ip = fields.String(required=True)
     username = fields.String()
     password = fields.String()
     check_only = fields.Boolean()
-    
+    timeout = fields.Integer(validate=validate.Range(min=60, max=600))
+
     class Meta:
-        fields = ("ip", "username", "password", "check_only")
+        fields = ("ip", "username", "password", "check_only", "timeout")
         required = ("ip",)
 
 
@@ -128,6 +130,11 @@ class DeviceStatusResource(Resource):
           500:
             description: Error getting device status
         """
+        # Reject malformed IPs early (prevents echoing unsanitised
+        # path input back in the response body).
+        if not is_valid_ip_address(device_ip):
+            return {'error': 'Invalid device IP address'}, 400
+
         # Find device in configuration
         devices_file = current_app.config.get('DEVICES_FILE', 'devices.yaml')
         devices = load_devices_from_file(devices_file)
@@ -213,6 +220,12 @@ class DeviceUpdateResource(Resource):
                   type: boolean
                   description: Only check if update is needed
                   default: false
+                timeout:
+                  type: integer
+                  description: Total timeout for update operation in seconds (60-600)
+                  minimum: 60
+                  maximum: 600
+                  default: 180
         responses:
           200:
             description: Update result
@@ -237,6 +250,44 @@ class DeviceUpdateResource(Resource):
                 needs_update:
                   type: boolean
                   description: Whether an update is needed
+                timeout_config:
+                  type: object
+                  description: Timeout configuration used for the operation
+                  properties:
+                    total_timeout:
+                      type: integer
+                      description: Total timeout in seconds
+                    initial_wait:
+                      type: integer
+                      description: Initial wait before checking device
+                    min_check_interval:
+                      type: number
+                      description: Minimum interval between checks
+                    max_check_interval:
+                      type: number
+                      description: Maximum interval between checks
+                timeout_report:
+                  type: object
+                  description: Detailed timeout information if applicable
+                  properties:
+                    total_timeout:
+                      type: integer
+                      description: Total timeout configured
+                    elapsed_time:
+                      type: number
+                      description: Time elapsed during operation
+                    phase:
+                      type: string
+                      description: Phase where timeout occurred
+                    attempts:
+                      type: integer
+                      description: Number of attempts made
+                    timed_out:
+                      type: boolean
+                      description: Whether operation timed out
+                    error_type:
+                      type: string
+                      description: Type of error encountered
           400:
             description: Invalid request
           500:
@@ -244,24 +295,37 @@ class DeviceUpdateResource(Resource):
         """
         # Validate request data
         schema = DeviceUpdateSchema()
-        errors = schema.validate(request.json)
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return {'error': 'Invalid request',
+                    'details': 'Request body must be a JSON object'}, 400
+        errors = schema.validate(payload)
         if errors:
             return {'error': 'Invalid request', 'details': errors}, 400
         
         # Extract parameters
-        device_ip = request.json['ip']
-        check_only = request.json.get('check_only', False) if request.json.get('check_only') is not None else False
-        
+        device_ip = payload['ip']
+        check_only = payload.get('check_only', False) if payload.get('check_only') is not None else False
+        timeout = payload.get('timeout')  # Optional timeout override
+
         devices_file = current_app.config.get('DEVICES_FILE', 'devices.yaml')
         devices = load_devices_from_file(devices_file)
-        
+
         # Find the device by IP
         device = next((d for d in devices if d.get('ip') == device_ip), None)
-        
+
         # If we found the device in the config file, merge with any additional settings
         if device:
-            # Update device firmware
-            result = update_device_firmware(device, check_only)
+            # Create a copy of device config to avoid modifying the original
+            device_config = device.copy()
+
+            # Override timeout if provided in request
+            if timeout is not None:
+                device_config['timeout'] = timeout
+                current_app.logger.info(f"Using timeout override: {timeout}s for device {device_ip}")
+
+            # Update device firmware with enhanced timeout handling
+            result = update_device_firmware(device_config, check_only)
         else:
             result = {'error': 'Device not found'}, 404
         
@@ -291,6 +355,11 @@ class AllDevicesUpdateResource(Resource):
                   type: boolean
                   description: Only update devices that need updates
                   default: true
+                timeout:
+                  type: integer
+                  description: Global timeout override for all devices (60-600 seconds)
+                  minimum: 60
+                  maximum: 600
         responses:
           200:
             description: Update results
@@ -349,8 +418,15 @@ class AllDevicesUpdateResource(Resource):
         devices = load_devices_from_file(devices_file)
         
         # Extract parameters
-        check_only = request.json.get('check_only', False) if request.json else False
-        update_only_needed = request.json.get('update_only_needed', True) if request.json else True
+        payload = request.get_json(silent=True) or {}
+        check_only = payload.get('check_only', False)
+        update_only_needed = payload.get('update_only_needed', True)
+        global_timeout = payload.get('timeout')
+
+        if global_timeout is not None:
+            if global_timeout < 60 or global_timeout > 600:
+                return {'error': 'Global timeout must be between 60 and 600 seconds'}, 400
+            current_app.logger.info(f"Using global timeout override: {global_timeout}s for all devices")
         
         # First check which devices need updates
         if update_only_needed and not check_only:
@@ -376,7 +452,11 @@ class AllDevicesUpdateResource(Resource):
         for device in devices_to_update:
             # Create a copy of the device config
             device_config = device.copy()
-            
+
+            # Apply global timeout override if provided
+            if global_timeout is not None:
+                device_config['timeout'] = global_timeout
+
             result = update_device_firmware(device_config, check_only)
             
             # Add additional status fields
