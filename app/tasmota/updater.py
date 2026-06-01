@@ -19,13 +19,74 @@ import socket
 import json
 import re
 import ipaddress
+import math
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Dict, Any, Optional, Tuple
+from dataclasses import dataclass
+from enum import Enum
 from app.tasmota.utils import is_fake_device
 from urllib.parse import urlparse
 
 # Setup module logger
 logger = logging.getLogger(__name__)
+
+
+class TimeoutPhase(Enum):
+    """Enumeration for different timeout phases during firmware update"""
+    INITIAL_WAIT = "initial_wait"
+    RESTART_VERIFICATION = "restart_verification"
+    FIRMWARE_DOWNLOAD = "firmware_download"
+    FIRMWARE_FLASH = "firmware_flash"
+    DEVICE_REBOOT = "device_reboot"
+
+
+@dataclass
+class TimeoutConfig:
+    """Configuration for different timeout phases"""
+    total_timeout: int = 240  # Total timeout in seconds (default 4 minutes)
+    initial_wait: int = 10    # Initial wait before checking device status
+    min_check_interval: float = 1.0  # Minimum check interval
+    max_check_interval: float = 30.0  # Maximum check interval
+    backoff_multiplier: float = 1.5   # Exponential backoff multiplier
+    request_timeout: int = 5          # Individual request timeout
+
+    def __post_init__(self):
+        """Validate timeout configuration"""
+        if self.total_timeout < 30:
+            raise ValueError("Total timeout must be at least 30 seconds")
+        if self.total_timeout > 600:
+            raise ValueError("Total timeout cannot exceed 600 seconds (10 minutes)")
+        if self.initial_wait >= self.total_timeout:
+            raise ValueError("Initial wait must be less than total timeout")
+        if self.min_check_interval >= self.max_check_interval:
+            raise ValueError("Min check interval must be less than max check interval")
+
+
+@dataclass
+class TimeoutReport:
+    """Detailed timeout information for API responses"""
+    total_timeout: int
+    elapsed_time: float
+    phase: TimeoutPhase
+    attempts: int
+    last_check_interval: float
+    timed_out: bool
+    error_type: str
+    details: Dict[str, Any]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'total_timeout': self.total_timeout,
+            'elapsed_time': round(self.elapsed_time, 2),
+            'phase': self.phase.value,
+            'attempts': self.attempts,
+            'last_check_interval': round(self.last_check_interval, 2),
+            'timed_out': self.timed_out,
+            'error_type': self.error_type,
+            'details': self.details
+        }
 
 
 def sanitize_log_data(data):
@@ -175,20 +236,21 @@ def get_dns_name(device_config):
     return None
 
 
-def get_device_firmware_version(device_config):
+def get_device_firmware_version(device_config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Get the current firmware version from a Tasmota device
-    
+
     Args:
-        device_config (dict): Device configuration dictionary containing:
+        device_config: Device configuration dictionary containing:
             - ip (str): IP address of the device (required)
             - username (str, optional): Username for authentication
             - password (str, optional): Password for authentication
             - firmware_info (dict, optional): Pre-configured firmware info for fake devices
-    
+            - timeout (int, optional): Request timeout in seconds (default: 60)
+
     Returns:
-        dict: Dictionary containing version information or None if failed
-              Keys: 'version', 'core_version', 'sdk_version', 'is_minimal'
+        Dictionary containing version information or None if failed
+        Keys: 'version', 'core_version', 'sdk_version', 'is_minimal'
     """
     
     # Validate required fields in device_config
@@ -199,6 +261,9 @@ def get_device_firmware_version(device_config):
     # Extract device information
     ip_address = device_config['ip']
     timeout = device_config.get('timeout', 60)
+    # Ensure timeout is reasonable for version check
+    if timeout > 30:
+        timeout = 30  # Version check should be quick
     
     # Check if this is a fake device with pre-configured firmware info
     if is_fake_device(device_config):
@@ -264,6 +329,159 @@ def get_device_firmware_version(device_config):
         logger.error(f"{ip_address}: Error connecting to device: {error_msg}")
     
     return None
+
+
+def verify_device_restart_with_backoff(
+    device_config: Dict[str, Any],
+    timeout_config: TimeoutConfig
+) -> Tuple[bool, TimeoutReport]:
+    """
+    Verify device restart with exponential backoff and detailed timeout reporting
+
+    Args:
+        device_config: Device configuration dictionary
+        timeout_config: Timeout configuration for the verification process
+
+    Returns:
+        Tuple of (success, timeout_report)
+        - success: True if device came back online, False if timed out
+        - timeout_report: Detailed information about the timeout process
+    """
+    ip_address = device_config['ip']
+    base_url = build_device_url(device_config)
+
+    if not base_url:
+        return False, TimeoutReport(
+            total_timeout=timeout_config.total_timeout,
+            elapsed_time=0,
+            phase=TimeoutPhase.RESTART_VERIFICATION,
+            attempts=0,
+            last_check_interval=0,
+            timed_out=True,
+            error_type="invalid_url",
+            details={"message": "Failed to build valid device URL"}
+        )
+
+    start_time = time.time()
+    attempts = 0
+    current_interval = timeout_config.min_check_interval
+
+    logger.info(f"{ip_address}: Starting device restart verification with exponential backoff")
+    logger.debug(f"{ip_address}: Timeout config - total: {timeout_config.total_timeout}s, "
+                f"initial wait: {timeout_config.initial_wait}s, "
+                f"interval range: {timeout_config.min_check_interval}-{timeout_config.max_check_interval}s")
+
+    # Initial wait to allow device to start the update process
+    logger.debug(f"{ip_address}: Initial wait of {timeout_config.initial_wait} seconds")
+    time.sleep(timeout_config.initial_wait)
+
+    while time.time() - start_time < timeout_config.total_timeout:
+        attempts += 1
+        elapsed = time.time() - start_time
+
+        logger.debug(f"{ip_address}: Attempt {attempts} after {elapsed:.1f}s (interval: {current_interval:.1f}s)")
+
+        try:
+            response = requests.get(
+                base_url,
+                timeout=timeout_config.request_timeout,
+                params={"cmnd": "Status"}  # Simple status check
+            )
+
+            if response.status_code == 200:
+                # Device is back online
+                elapsed_time = time.time() - start_time
+                logger.info(f"{ip_address}: Device restart verified successfully after {elapsed_time:.1f}s "
+                           f"({attempts} attempts)")
+
+                return True, TimeoutReport(
+                    total_timeout=timeout_config.total_timeout,
+                    elapsed_time=elapsed_time,
+                    phase=TimeoutPhase.RESTART_VERIFICATION,
+                    attempts=attempts,
+                    last_check_interval=current_interval,
+                    timed_out=False,
+                    error_type="none",
+                    details={
+                        "success": True,
+                        "final_status_code": response.status_code
+                    }
+                )
+
+        except requests.exceptions.Timeout:
+            logger.debug(f"{ip_address}: Request timeout on attempt {attempts}")
+        except requests.exceptions.ConnectionError:
+            logger.debug(f"{ip_address}: Connection error on attempt {attempts} (device still rebooting)")
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"{ip_address}: Request error on attempt {attempts}: {sanitize_log_data(str(e))}")
+
+        # Wait before next attempt with exponential backoff
+        time.sleep(current_interval)
+
+        # Increase interval for next attempt
+        current_interval = min(
+            current_interval * timeout_config.backoff_multiplier,
+            timeout_config.max_check_interval
+        )
+
+    # Timeout reached
+    elapsed_time = time.time() - start_time
+    logger.warning(f"{ip_address}: Device restart verification timed out after {elapsed_time:.1f}s "
+                   f"({attempts} attempts)")
+
+    return False, TimeoutReport(
+        total_timeout=timeout_config.total_timeout,
+        elapsed_time=elapsed_time,
+        phase=TimeoutPhase.RESTART_VERIFICATION,
+        attempts=attempts,
+        last_check_interval=current_interval,
+        timed_out=True,
+        error_type="restart_timeout",
+        details={
+            "message": f"Device did not come back online within {timeout_config.total_timeout} seconds",
+            "final_interval": current_interval
+        }
+    )
+
+
+def create_timeout_config(device_config: Dict[str, Any]) -> TimeoutConfig:
+    """
+    Create timeout configuration from device config with validation
+
+    Args:
+        device_config: Device configuration dictionary
+
+    Returns:
+        TimeoutConfig with validated parameters
+    """
+    # Get timeout from device config or use default (align with frontend default)
+    total_timeout = device_config.get('timeout', 240)
+
+    # Ensure minimum timeout for firmware updates
+    if total_timeout < 60:
+        logger.warning(f"Timeout {total_timeout}s is too low for firmware updates, using 60s minimum")
+        total_timeout = 60
+
+    # Cap maximum timeout
+    if total_timeout > 600:
+        logger.warning(f"Timeout {total_timeout}s exceeds maximum, capping at 600s")
+        total_timeout = 600
+
+    # Adjust initial wait based on total timeout
+    initial_wait = min(10, total_timeout // 12)  # At most 1/12 of total timeout, max 10s
+
+    # Adjust check intervals based on total timeout
+    min_interval = 1.0 if total_timeout <= 120 else 2.0
+    max_interval = min(30.0, total_timeout // 6)  # At most 1/6 of total timeout
+
+    return TimeoutConfig(
+        total_timeout=total_timeout,
+        initial_wait=initial_wait,
+        min_check_interval=min_interval,
+        max_check_interval=max_interval,
+        backoff_multiplier=1.5,
+        request_timeout=5
+    )
 
 
 def compare_versions(device_version, latest_version):
@@ -408,7 +626,13 @@ def fetch_latest_tasmota_release():
         url = "https://api.github.com/repos/arendst/Tasmota/releases/latest"
         
         logger.debug("Fetching latest Tasmota release information from GitHub")
-        response = requests.get(url, timeout=10)
+        # Optional GitHub auth raises the unauthenticated 60 req/hr rate
+        # limit to 5000 req/hr. Set GITHUB_TOKEN to enable.
+        headers = {"Accept": "application/vnd.github+json"}
+        github_token = os.environ.get("GITHUB_TOKEN", "").strip()
+        if github_token:
+            headers["Authorization"] = f"Bearer {github_token}"
+        response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
             release_data = response.json()
@@ -458,19 +682,20 @@ def fetch_latest_tasmota_release():
     return None
 
 
-def update_device_firmware(device_config, check_only=False):
+def update_device_firmware(device_config: Dict[str, Any], check_only: bool = False) -> Dict[str, Any]:
     """
-    Update firmware on a single Tasmota device
-    
+    Update firmware on a single Tasmota device with enhanced timeout handling
+
     Args:
-        device_config (dict): Device configuration dictionary containing:
+        device_config: Device configuration dictionary containing:
             - ip (str): IP address of the device (required)
             - username (str, optional): Username for authentication
             - password (str, optional): Password for authentication
-        check_only (bool): If True, only check firmware version without updating
-    
+            - timeout (int, optional): Total timeout for the update operation in seconds (60-600)
+        check_only: If True, only check firmware version without updating
+
     Returns:
-        dict: Result information including success status and version details
+        Result dictionary with success status, version details, and timeout information
     """
     # Validate required fields in device_config
     if not device_config or not isinstance(device_config, dict) or 'ip' not in device_config:
@@ -486,6 +711,9 @@ def update_device_firmware(device_config, check_only=False):
     # Extract device information
     device_ip = device_config['ip']
     
+    # Create timeout configuration
+    timeout_config = create_timeout_config(device_config)
+
     result = {
         "ip": device_ip,
         "success": False,
@@ -494,7 +722,13 @@ def update_device_firmware(device_config, check_only=False):
         "latest_version": "Unknown",
         "needs_update": False,
         "dns_name": get_dns_name(device_config),
-        "timeout": device_config.get('timeout', 60)
+        "timeout_config": {
+            "total_timeout": timeout_config.total_timeout,
+            "initial_wait": timeout_config.initial_wait,
+            "min_check_interval": timeout_config.min_check_interval,
+            "max_check_interval": timeout_config.max_check_interval
+        },
+        "timeout_report": None
     }
     
     # Get current firmware version
@@ -548,55 +782,117 @@ def update_device_firmware(device_config, check_only=False):
     base_url = build_device_url(device_config)
     if not base_url:
         result["message"] = f"Invalid device IP address: {device_ip}"
+        result["timeout_report"] = TimeoutReport(
+            total_timeout=timeout_config.total_timeout,
+            elapsed_time=0,
+            phase=TimeoutPhase.INITIAL_WAIT,
+            attempts=0,
+            last_check_interval=0,
+            timed_out=False,
+            error_type="invalid_url",
+            details={"message": "Invalid device URL"}
+        ).to_dict()
         return result
-    timeout = device_config.get('timeout', 60)
-    
+
     try:
-        # Send upgrade command
-        logger.info(f"{device_ip}: Upgrading to latest official release")
+        # Send upgrade command with timeout
+        logger.info(f"{device_ip}: Initiating firmware upgrade to latest official release")
+        logger.debug(f"{device_ip}: Using timeout configuration: {timeout_config.total_timeout}s total")
+
         params = {"cmnd": "Upgrade 1"}
-        response = requests.get(base_url, params=params, timeout=timeout)
-        
-        if response.status_code != 200:
-            result["message"] = f"Failed to send upgrade command. Status code: {response.status_code}"
+        start_time = time.time()
+
+        try:
+            response = requests.get(
+                base_url,
+                params=params,
+                timeout=timeout_config.request_timeout
+            )
+        except requests.exceptions.Timeout:
+            elapsed_time = time.time() - start_time
+            result["message"] = "Timeout sending upgrade command to device"
+            result["timeout_report"] = TimeoutReport(
+                total_timeout=timeout_config.total_timeout,
+                elapsed_time=elapsed_time,
+                phase=TimeoutPhase.INITIAL_WAIT,
+                attempts=1,
+                last_check_interval=0,
+                timed_out=True,
+                error_type="command_timeout",
+                details={"message": "Device did not respond to upgrade command"}
+            ).to_dict()
             return result
-        
-        # Wait for device to restart (typically takes 10-60 seconds)
-        logger.info(f"{device_ip}: Waiting for device to restart and come back online")
-        time.sleep(5)  # Initial wait to allow device to start update
-        
-        # Check if device comes back online
-        
-        # Add timeout info to result
-        result['timeout_seconds'] = timeout
-        if timeout < 5:
-            timeout = 5
-        for _ in range(timeout // 5):
-            try:
-                check_response = requests.get(base_url, timeout=2)
-                if check_response.status_code == 200:
-                    # Device is back online
-                    result["success"] = True
-                    result["message"] = "Update successful"
-                    
-                    # Get new firmware version
-                    new_firmware_info = get_device_firmware_version(device_config)
-                    if new_firmware_info:
-                        result["current_version"] = new_firmware_info["version"]
-                    
-                    return result
-            except requests.exceptions.RequestException:
-                # Device still not reachable, continue waiting
-                pass
-            
-            time.sleep(5)
-        
-        # If we get here, device did not come back online in time
-        result["message"] = f"Update initiated but device did not come back online within {timeout} seconds"
-        
+
+        if response.status_code != 200:
+            elapsed_time = time.time() - start_time
+            result["message"] = f"Failed to send upgrade command. Status code: {response.status_code}"
+            result["timeout_report"] = TimeoutReport(
+                total_timeout=timeout_config.total_timeout,
+                elapsed_time=elapsed_time,
+                phase=TimeoutPhase.INITIAL_WAIT,
+                attempts=1,
+                last_check_interval=0,
+                timed_out=False,
+                error_type="command_error",
+                details={
+                    "message": "Upgrade command failed",
+                    "status_code": response.status_code
+                }
+            ).to_dict()
+            return result
+
+        logger.info(f"{device_ip}: Upgrade command sent successfully, waiting for device restart")
+
+        # Verify device restart with exponential backoff
+        restart_success, timeout_report = verify_device_restart_with_backoff(
+            device_config, timeout_config
+        )
+
+        # Add timeout report to result
+        result["timeout_report"] = timeout_report.to_dict()
+
+        if restart_success:
+            # Device is back online - get new firmware version
+            result["success"] = True
+            result["message"] = "Firmware update completed successfully"
+
+            logger.info(f"{device_ip}: Verifying firmware update completion")
+            new_firmware_info = get_device_firmware_version(device_config)
+            if new_firmware_info:
+                result["current_version"] = new_firmware_info["version"]
+                logger.info(f"{device_ip}: New firmware version: {new_firmware_info['version']}")
+            else:
+                logger.warning(f"{device_ip}: Could not verify new firmware version")
+        else:
+            # Timeout or other error during restart verification
+            if timeout_report.error_type == "restart_timeout":
+                result["message"] = (
+                    f"Firmware update initiated but device did not come back online "
+                    f"within {timeout_config.total_timeout} seconds. "
+                    f"The update may still be in progress."
+                )
+            else:
+                result["message"] = f"Firmware update failed: {timeout_report.details.get('message', 'Unknown error')}"
+
     except requests.exceptions.RequestException as e:
-        # Sanitize error message to avoid leaking sensitive data
+        # Handle network errors during upgrade command
+        elapsed_time = time.time() - start_time if 'start_time' in locals() else 0
         error_msg = sanitize_log_data(str(e))
-        result["message"] = f"Error connecting to device: {error_msg}"
-    
+        logger.error(f"{device_ip}: Network error during firmware update: {error_msg}")
+
+        result["message"] = f"Network error during firmware update: {error_msg}"
+        result["timeout_report"] = TimeoutReport(
+            total_timeout=timeout_config.total_timeout,
+            elapsed_time=elapsed_time,
+            phase=TimeoutPhase.INITIAL_WAIT,
+            attempts=1,
+            last_check_interval=0,
+            timed_out=False,
+            error_type="network_error",
+            details={
+                "message": "Network error during upgrade",
+                "error": error_msg
+            }
+        ).to_dict()
+
     return result
