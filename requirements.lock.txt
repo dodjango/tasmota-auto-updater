@@ -20,7 +20,7 @@ jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 markupsafe==3.0.3
 marshmallow==4.3.0
-mistune==3.2.1
+mistune==3.3.2
 packaging==26.2
 pluggy==1.6.0
 pygments==2.20.0
