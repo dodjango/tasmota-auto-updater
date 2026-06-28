@@ -3,7 +3,7 @@
 Version information for the Tasmota Updater application.
 """
 
-__version__ = "0.3.0"  # Security hardening + Flask 3 upgrade; optional API_KEY/GITHUB_TOKEN auth; CORS same-origin default
+__version__ = "0.3.1"  # Security hardening + Flask 3 upgrade; optional API_KEY/GITHUB_TOKEN auth; CORS same-origin default
 """
 Version string following Semantic Versioning (SemVer) format: MAJOR.MINOR.PATCH
 - MAJOR: Incompatible API changes
