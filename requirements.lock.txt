@@ -35,7 +35,7 @@ pyyaml==6.0.3
 referencing==0.37.0
 requests==2.34.2
 requests-mock==1.12.1
-responses==0.26.1
+responses==0.26.2
 rpds-py==2026.5.1
 six==1.17.0
 sortedcontainers==2.4.0
