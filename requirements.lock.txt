@@ -39,7 +39,7 @@ responses==0.26.1
 rpds-py==2026.5.1
 six==1.17.0
 sortedcontainers==2.4.0
-typing-extensions==4.15.0
+typing-extensions==4.16.0
 urllib3==2.7.0
 watchdog==6.0.0
 werkzeug==3.1.8
