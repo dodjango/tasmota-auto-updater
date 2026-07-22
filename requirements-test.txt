@@ -1,0 +1,79 @@
+# Testing dependencies for Tasmota Updater timeout testing
+
+# Core testing framework
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-html>=3.2.0
+pytest-xdist>=3.3.0
+pytest-timeout>=2.1.0
+pytest-mock>=3.11.0
+pytest-asyncio>=0.21.0
+pytest-benchmark>=4.0.0
+
+# Test utilities and mocking
+requests-mock>=1.11.0
+responses>=0.23.0
+factory-boy>=3.3.0
+faker>=19.0.0
+freezegun>=1.2.0
+testcontainers>=3.7.0
+
+# Frontend testing (Selenium)
+selenium>=4.11.0
+webdriver-manager>=3.9.0
+
+# Performance and memory profiling
+psutil>=5.9.0
+memory-profiler>=0.60.0
+py-spy>=0.3.14
+
+# Code quality and security
+ruff>=0.0.280
+black>=23.7.0
+mypy>=1.5.0
+bandit>=1.7.5
+safety>=2.3.0
+pip-audit>=2.6.0
+
+# Mutation testing (optional)
+mutmut>=2.4.0
+cosmic-ray>=8.3.6
+
+# Schema validation
+pydantic>=2.0.0
+jsonschema>=4.19.0
+cerberus>=1.3.5
+
+# HTTP/API testing
+httpx>=0.24.0
+respx>=0.20.0
+hypothesis>=6.82.0
+
+# Property-based testing
+hypothesis>=6.82.0
+
+# Test data generation
+mimesis>=10.1.0
+
+# Parallel execution
+pytest-parallel>=0.1.1
+
+# Test reporting and analysis
+pytest-json-report>=1.5.0
+pytest-metadata>=3.0.0
+coverage[toml]>=7.2.0
+allure-pytest>=2.13.0
+
+# CI/CD integration
+pytest-github-actions-annotate-failures>=0.2.0
+
+# Documentation testing
+pytest-doctestplus>=1.0.0
+
+# Environment management
+python-dotenv>=1.0.0
+
+# Type checking in tests
+types-requests>=2.31.0
+types-PyYAML>=6.0.0
+types-setuptools>=68.0.0

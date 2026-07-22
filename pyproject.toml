@@ -93,6 +93,21 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "browser: requires a real browser/Selenium WebDriver (excluded in CI)",
+    "docker: requires a Docker daemon / testcontainers (excluded in CI)",
+    "stale: known-outdated vs current code, pending repair (excluded in CI)",
+    "boundary: boundary-value tests",
+    "security: security-focused input-validation tests",
+    "edge_cases: edge-case tests",
+    "coordination: multi-component coordination tests",
+    "container: container/gunicorn runtime tests",
+    "infrastructure: infrastructure-level tests",
+    "performance: performance tests",
+    "load: load tests",
+    "resource: resource-usage tests",
+    "stress: stress tests",
+    "frontend: frontend tests",
+    "visual_feedback: visual-feedback frontend tests",
 ]
 
 [tool.coverage.run]
