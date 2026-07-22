@@ -1,0 +1,35 @@
+name: release-please
+
+# Automates releases via conventional commits. On every push to main,
+# release-please maintains a release PR (version bump + CHANGELOG). Merging that
+# PR creates the git tag + GitHub release, and then triggers the container
+# publish for the new tag (GITHUB_TOKEN-created tags do not trigger workflows on
+# their own, so we dispatch publish-container explicitly).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Trigger container publish for the new tag
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh workflow run "Publish Container Image" --ref "$TAG"

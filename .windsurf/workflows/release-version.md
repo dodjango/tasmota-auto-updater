@@ -1,92 +1,39 @@
 ---
-description: Create a new release using Semantic Versioning
+description: How releases work (automated via release-please)
 ---
 
-# Release a New Version
+# Releasing a New Version
 
-This workflow guides you through creating a new release of the Tasmota Updater project using Semantic Versioning with GitHub CLI.
+Releases are **fully automated** by [release-please](https://github.com/googleapis/release-please)
+via the `.github/workflows/release-please.yml` workflow. There is no manual
+version-bump / tag / `gh release create` step anymore.
 
-## Prerequisites
+## How it works
 
-1. Ensure GitHub CLI is installed and authenticated:
-```bash
-# Check if GitHub CLI is installed
-gh --version
+1. **Merge conventional commits to `main`.** Version bumps are derived from the
+   commit types:
+   - `feat: …` → minor bump (e.g. 0.3.0 → 0.4.0)
+   - `fix: …` → patch bump (e.g. 0.3.0 → 0.3.1)
+   - `feat!: …` / `BREAKING CHANGE:` → minor bump while < 1.0.0
+     (`bump-minor-pre-major` is enabled)
+   - `chore`/`docs`/`test`/`ci`/dependency bumps → no release on their own
+2. **release-please opens/updates a release PR** titled `chore(main): release x.y.z`.
+   It keeps the version (`app/version.py`, `app/__init__.py`, `pyproject.toml`)
+   and `CHANGELOG.md` up to date as more commits land.
+3. **Merge the release PR** to cut the release. That creates the git tag
+   `vx.y.z` and the GitHub release, and then dispatches the
+   *Publish Container Image* workflow for the new tag so the versioned container
+   image is built.
 
-# If not installed, install it (example for Ubuntu/Debian)
-# sudo apt install gh
+## Version source of truth
 
-# Authenticate with GitHub
-gh auth login
-```
+`app/version.py` (`__version__`) is what the app serves at `/version`.
+release-please keeps `app/version.py`, `app/__init__.py`, and
+`pyproject.toml` in sync — configuration lives in `release-please-config.json`
+and the current released version in `.release-please-manifest.json`.
 
-## Steps
+## If a release PR does not appear
 
-1. Ensure your working directory is clean and you're on the main branch:
-```bash
-# Check repository status
-gh repo view --web
-
-# Switch to main branch and pull latest changes
-git checkout main
-git pull
-```
-
-2. Update the version number in `app/version.py` according to Semantic Versioning rules:
-   - MAJOR: Incompatible API changes
-   - MINOR: Backward-compatible new functionality
-   - PATCH: Backward-compatible bug fixes
-
-3. Commit the version change:
-```bash
-git add app/version.py
-git commit -m "Bump version to x.y.z"
-```
-
-4. Create a release branch (optional but recommended):
-```bash
-git checkout -b release/vx.y.z
-```
-
-5. Push the changes:
-```bash
-# If using a release branch
-git push -u origin release/vx.y.z
-
-# If working directly on main
-git push origin main
-```
-
-6. Generate release notes from git commits and create a GitHub release:
-```bash
-# Generate release notes from commits since the last tag
-PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-if [ -z "$PREVIOUS_TAG" ]; then
-  # If there are no previous tags, get all commits
-  RELEASE_NOTES=$(git log --pretty=format:"* %s (%h)" --no-merges)
-else
-  # Get commits since the last tag
-  RELEASE_NOTES=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"* %s (%h)" --no-merges)
-fi
-
-# Create a release with automatically generated notes
-gh release create vx.y.z --title "Release vx.y.z" --notes "$RELEASE_NOTES"
-
-# Alternative: Use GitHub's auto-generated release notes
-# gh release create vx.y.z --title "Release vx.y.z" --generate-notes
-```
-
-7. Let the user review the release notes.
-
-8. Monitor the GitHub Actions workflow that will automatically:
-```bash
-# View the running workflows
-gh workflow list
-
-# View the status of the latest workflow run
-gh run list --workflow "Publish Container Image" --limit 1
-
-# Watch the workflow progress
-gh run watch
-```
+- Check the `release-please` workflow run under the Actions tab.
+- Confirm there is at least one release-triggering commit (`feat`/`fix`) since
+  the last release.
