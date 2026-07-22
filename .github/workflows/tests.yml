@@ -1,0 +1,60 @@
+name: Tests
+
+# Runs the reliable "green core" of the pytest suite across supported Python
+# versions. Tests that are outdated vs the current code (marked `stale`) or that
+# need external infrastructure (marked `slow`/`integration`/`browser`/`docker`)
+# are deselected — see the tracking issue for the stale-test repair backlog.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Create virtualenv and install dependencies
+        run: |
+          uv venv --python ${{ matrix.python-version }}
+          uv pip install -r requirements.txt
+          uv pip install \
+            pytest pytest-cov pytest-timeout pytest-mock \
+            responses requests-mock hypothesis freezegun psutil
+
+      - name: Run test suite (CI green core)
+        run: |
+          .venv/bin/python -m pytest \
+            -m "not stale and not slow and not integration and not browser and not docker" \
+            --timeout=120
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: |
+            coverage.xml
+            htmlcov/
+          if-no-files-found: ignore
