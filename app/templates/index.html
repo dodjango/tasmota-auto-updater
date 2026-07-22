@@ -11,15 +11,20 @@
 </head>
 <body>
     <div x-data="tasmotaApp()" x-init="init()">
-        <nav class="navbar is-primary" role="navigation" aria-label="main navigation">
+        <nav class="navbar is-primary" role="navigation" aria-label="main navigation" x-data="{ navOpen: false }">
             <div class="navbar-brand">
                 <a class="navbar-item" href="/" title="Return to home page">
                     <img src="{{ url_for('static', filename='images/tasmota-logo.png') }}" alt="Tasmota Logo" width="112" height="28">
                     <span class="has-text-weight-bold ml-2">Tasmota Updater</span>
                 </a>
+                <a role="button" class="navbar-burger" :class="{ 'is-active': navOpen }" @click="navOpen = !navOpen" aria-label="menu" :aria-expanded="navOpen.toString()">
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                </a>
             </div>
-            
-            <div class="navbar-menu">
+
+            <div class="navbar-menu" :class="{ 'is-active': navOpen }">
                 <div class="navbar-end">
                     <div class="navbar-item">
                         <div class="buttons">
@@ -102,12 +107,6 @@
                     <p class="mt-2">Loading devices...</p>
                 </div>
                 
-                <!-- Error message -->
-                <div class="notification is-danger" x-show="error">
-                    <button class="delete" @click="error = ''" title="Dismiss this error message"></button>
-                    <p x-text="error"></p>
-                </div>
-                
                 <!-- No devices message -->
                 <div class="notification is-info" x-show="!isLoading && devices.length === 0 && !error">
                     <p>No devices found. Please add devices to your configuration file.</p>
@@ -118,7 +117,7 @@
                     <template x-for="device in devices" :key="device.ip">
                         <div class="column is-one-third">
                             <div class="card">
-                                <header class="card-header" @click="window.open(getDeviceUrl(device), '_blank')" style="cursor: pointer;" title="Open device web interface in a new tab">
+                                <header class="card-header" @click="window.open(getDeviceUrl(device), '_blank', 'noopener')" style="cursor: pointer;" title="Open device web interface in a new tab">
                                     <p class="card-header-title">
                                         <span x-text="device.ip"></span>
                                         <span x-show="device.dns_name" class="tag is-info is-light ml-2" x-text="device.dns_name"></span>

@@ -23,7 +23,6 @@ class DeviceSchema(Schema):
 
     class Meta:
         fields = ("ip", "username", "password")
-        required = ("ip",)
 
 
 class DeviceUpdateSchema(Schema):
@@ -36,7 +35,6 @@ class DeviceUpdateSchema(Schema):
 
     class Meta:
         fields = ("ip", "username", "password", "check_only", "timeout")
-        required = ("ip",)
 
 
 # API Resources
@@ -327,7 +325,7 @@ class DeviceUpdateResource(Resource):
             # Update device firmware with enhanced timeout handling
             result = update_device_firmware(device_config, check_only)
         else:
-            result = {'error': 'Device not found'}, 404
+            return {'error': 'Device not found'}, 404
         
         return jsonify(result)
 

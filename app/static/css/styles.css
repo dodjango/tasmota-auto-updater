@@ -70,6 +70,12 @@ body {
 .card-footer-item[disabled] {
     opacity: 0.5;
     cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Alpine.js: hide cloaked elements until initialised (the CDN build omits this rule) */
+[x-cloak] {
+    display: none !important;
 }
 
 /* Loading spinner */

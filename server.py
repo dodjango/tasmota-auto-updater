@@ -59,6 +59,7 @@ def create_app(test_config=None):
     # Load default configuration
     app.config.from_mapping(
         SECRET_KEY=secret_key,
+        MAX_CONTENT_LENGTH=int(os.environ.get('MAX_CONTENT_LENGTH', 64 * 1024)),
         DEVICES_FILE=os.environ.get('DEVICES_FILE', 'devices.yaml'),
         # Security settings
         SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('true', '1', 't'),
@@ -98,7 +99,7 @@ def create_app(test_config=None):
         def _require_api_key():
             if request.path.startswith('/api/'):
                 provided = request.headers.get('X-API-Key', '')
-                if not hmac.compare_digest(provided, api_key):
+                if not hmac.compare_digest(provided.encode('utf-8'), api_key.encode('utf-8')):
                     return jsonify({'error': 'Unauthorized'}), 401
         logger.info("API key authentication enabled for /api/* endpoints")
     else:
@@ -141,6 +142,16 @@ def create_app(test_config=None):
         """Health check endpoint for container orchestration"""
         return {"status": "healthy"}, 200
     
+    # Baseline security headers (defense-in-depth). A strict CSP is intentionally
+    # deferred until the CDN assets are self-hosted, since Alpine relies on
+    # inline expressions/handlers that a strict policy would break.
+    @app.after_request
+    def _security_headers(response):
+        response.headers.setdefault('X-Frame-Options', 'DENY')
+        response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+        response.headers.setdefault('Referrer-Policy', 'no-referrer')
+        return response
+
     return app
 
 if __name__ == '__main__':
