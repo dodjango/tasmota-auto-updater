@@ -21,7 +21,10 @@ services:
     environment:
       # Use environment variable with fallback
       - DEVICES_FILE=${DEVICES_FILE:-devices.yaml}
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      # SECRET_KEY: leave unset and the app generates an ephemeral random key at
+      # startup. Set a strong, persistent value only if you need sessions to
+      # survive restarts (the bundled UI currently uses no server-side sessions).
+      - SECRET_KEY=${SECRET_KEY:-}
       - HOST=0.0.0.0
       - PORT=5001
       # Security settings
@@ -32,8 +35,13 @@ services:
       - ENV_FILE=
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-4}
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      # slim image has no curl — use the Python stdlib instead
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')"]
       interval: 30s
       timeout: 10s
       retries: 3

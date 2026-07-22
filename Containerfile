@@ -57,6 +57,10 @@ USER appuser
 # Expose the port the app runs on
 EXPOSE 5001
 
+# Container healthcheck — the slim image has no curl, so use the Python stdlib.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')" || exit 1
+
 # Use tini as init process to handle signals properly
 ENTRYPOINT ["/usr/bin/tini", "--"]
 

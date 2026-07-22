@@ -51,10 +51,10 @@ function tasmotaApp() {
             this.isLoading = true;
             this.error = '';
             
+            const timeoutValue = 60; // Default to 60 seconds for device listing
             try {
                 // Create an AbortController
                 const controller = new AbortController();
-                const timeoutValue = 60; // Default to 10 seconds for device listing
                 
                 // Set up timeout
                 const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
@@ -100,10 +100,10 @@ function tasmotaApp() {
         },
         
         async fetchLatestRelease() {
+            const timeoutValue = 10; // Default to 10 seconds for release info
             try {
                 // Create an AbortController
                 const controller = new AbortController();
-                const timeoutValue = 10; // Default to 10 seconds for release info
                 
                 // Set up timeout
                 const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
@@ -169,10 +169,10 @@ function tasmotaApp() {
         async checkDeviceUpdate(device) {
             if (!device.status) return;
             console.log(`Checking update status for ${device.ip}`);
+            const timeoutValue = device.timeout || 60; // Default to 60 seconds
             try {
                 // Create an AbortController
                 const controller = new AbortController();
-                const timeoutValue = device.timeout || 60; // Default to 10 seconds
                 
                 // Set up timeout
                 const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
@@ -292,7 +292,8 @@ function tasmotaApp() {
             
             // Get user preference for update filtering
             const updateOnlyNeeded = localStorage.getItem('update_only_needed') !== 'false';
-            
+            const timeoutValue = 60; // Default to 60 seconds for batch updates
+
             try {
                 // First, mark all devices as pending update
                 this.devices.forEach(device => {
@@ -307,7 +308,6 @@ function tasmotaApp() {
                 
                 // Create an AbortController
                 const controller = new AbortController();
-                const timeoutValue = 60; // Default to 60 seconds for batch updates
                 
                 // Set up timeout
                 const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
@@ -395,10 +395,10 @@ function tasmotaApp() {
                 device.isChecking = true;
             });
             
+            const timeoutValue = 60; // Default to 60 seconds for batch checks
             try {
                 // Create an AbortController
                 const controller = new AbortController();
-                const timeoutValue = 60; // Default to 60 seconds for batch checks
                 
                 // Set up timeout
                 const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
