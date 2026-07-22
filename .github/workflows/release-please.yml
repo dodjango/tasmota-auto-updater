@@ -32,4 +32,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.release.outputs.tag_name }}
-        run: gh workflow run "Publish Container Image" --ref "$TAG"
+        run: gh workflow run "Publish Container Image" --repo "$GITHUB_REPOSITORY" --ref "$TAG"
