@@ -3,7 +3,7 @@
 Version information for the Tasmota Updater application.
 """
 
-__version__ = "0.3.1"  # x-release-please-version
+__version__ = "0.4.0"  # x-release-please-version
 """
 Version string following Semantic Versioning (SemVer) format: MAJOR.MINOR.PATCH
 - MAJOR: Incompatible API changes
