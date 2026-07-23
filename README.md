@@ -14,7 +14,7 @@ Tasmota Remote Updater is a tool that automatically updates multiple Tasmota dev
 
 **Three powerful interfaces in one tool:**
 
-- **Command-Line Interface**: Update multiple devices with a single command
+- **Command-Line Interface** *(deprecated)*: superseded by the Web Interface and REST API
 - **Web Interface**: Modern dashboard with one-click updates and real-time monitoring
 - **RESTful API**: Programmatic access with Swagger documentation
 
@@ -71,7 +71,7 @@ docker run -d -p 5001:5001 \
 ## 📚 Documentation
 
 - [Installation Guide](docs/installation.md)
-- [Command-Line Usage](docs/cli-usage.md)
+- [Command-Line Usage](docs/cli-usage.md) *(deprecated)*
 - [Web Interface Guide](docs/web-interface.md)
 - [API Documentation](docs/api.md)
 - [Configuration Options](docs/configuration.md)
