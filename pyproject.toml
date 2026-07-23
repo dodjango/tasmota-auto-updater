@@ -95,6 +95,7 @@ markers = [
     "unit: marks tests as unit tests",
     "browser: requires a real browser/Selenium WebDriver (excluded in CI)",
     "docker: requires a Docker daemon / testcontainers (excluded in CI)",
+    "e2e: Playwright browser end-to-end tests (run in a separate CI job, not the unit job)",
     "stale: known-outdated vs current code, pending repair (excluded in CI)",
     "boundary: boundary-value tests",
     "security: security-focused input-validation tests",

@@ -46,6 +46,7 @@ jobs:
       - name: Run test suite (CI green core)
         run: |
           .venv/bin/python -m pytest \
+            --ignore=tests/e2e \
             -m "not stale and not slow and not integration and not browser and not docker" \
             --timeout=120
 
@@ -58,3 +59,30 @@ jobs:
             coverage.xml
             htmlcov/
           if-no-files-found: ignore
+
+  e2e:
+    name: e2e (playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Create virtualenv and install dependencies
+        run: |
+          uv venv --python 3.12
+          uv pip install -r requirements.txt
+          uv pip install pytest pytest-timeout pytest-playwright
+
+      - name: Install Playwright browser
+        run: .venv/bin/python -m playwright install --with-deps chromium
+
+      - name: Run end-to-end tests (fake devices)
+        # -o addopts="" drops the unit-suite coverage flags (pointless here: the
+        # app runs in a subprocess, so in-process coverage measures nothing).
+        run: .venv/bin/python -m pytest tests/e2e -m e2e -o addopts="" --timeout=120
