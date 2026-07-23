@@ -12,6 +12,7 @@ from app.tasmota.updater import (
     is_valid_ip_address,
 )
 from app.tasmota.utils import load_devices_from_file, resolve_dns_name, is_fake_device
+from app.tasmota import jobs
 
 
 # Schema definitions for request/response validation
@@ -441,69 +442,53 @@ class AllDevicesUpdateResource(Resource):
                 return {'error': 'Global timeout must be between 60 and 600 seconds'}, 400
             current_app.logger.info(f"Using global timeout override: {global_timeout}s for all devices")
         
-        # First check which devices need updates
-        if update_only_needed and not check_only:
-            check_results = []
-            for device in devices:
-                # Create a copy of the device config
-                device_config = device.copy()
-                result = update_device_firmware(device_config, check_only=True)
-                check_results.append(result)
-            
-            # Filter devices that need updates
-            devices_to_update = []
-            for i, result in enumerate(check_results):
-                if result.get('needs_update', False):
-                    devices_to_update.append(devices[i])
-        else:
-            devices_to_update = devices
-        
-        # Update devices that need updates
-        results = []
-        updated_count = 0
-        
-        for device in devices_to_update:
-            # Create a copy of the device config
-            device_config = device.copy()
+        # Run the (potentially minutes-long) batch on a background thread and
+        # return immediately; the client polls GET /api/jobs/<id> for progress.
+        # This frees the worker and avoids the Gunicorn request timeout.
+        job_id = jobs.create_batch_job(
+            devices, check_only, update_only_needed, global_timeout
+        )
+        if job_id is None:
+            return {'error': 'A batch update is already in progress'}, 409
+        return {'job_id': job_id, 'status_url': f'/api/jobs/{job_id}'}, 202
 
-            # Apply global timeout override if provided
-            if global_timeout is not None:
-                device_config['timeout'] = global_timeout
 
-            result = update_device_firmware(device_config, check_only)
-            
-            # Add additional status fields
-            result['update_started'] = not check_only and (result.get('needs_update', False) or not update_only_needed)
-            result['update_completed'] = result['success'] and result['update_started']
-            
-            if result['update_completed']:
-                updated_count += 1
-                
-            results.append(result)
-        
-        # Generate summary
-        summary = {
-            'total': len(devices),
-            'success': sum(1 for r in results if r['success']),
-            'needs_update': sum(1 for r in results if r.get('needs_update', False)),
-            'updated': updated_count
-        }
-        
-        return jsonify({
-            'results': results,
-            'summary': summary
-        })
+class JobResource(Resource):
+    """Resource for polling the status/results of a background job."""
+
+    def get(self, job_id):
+        """
+        Get the status and (partial) results of a background job
+        ---
+        tags:
+          - updates
+        parameters:
+          - in: path
+            name: job_id
+            type: string
+            required: true
+        responses:
+          200:
+            description: Job status, progress and results
+          404:
+            description: Job not found
+        """
+        job = jobs.get_job(job_id)
+        if job is None:
+            return {'error': 'Job not found'}, 404
+        return job
 
 
 def init_api(app):
     """Initialize API routes"""
     api = Api(app)
-    
+
     # Register resources
     api.add_resource(DeviceListResource, '/api/devices')
     api.add_resource(DeviceStatusResource, '/api/devices/<string:device_ip>')
     api.add_resource(LatestReleaseResource, '/api/releases/latest')
     api.add_resource(DeviceUpdateResource, '/api/update')
     api.add_resource(AllDevicesUpdateResource, '/api/update/all')
-    
+    api.add_resource(JobResource, '/api/jobs/<string:job_id>')
+
     return api
