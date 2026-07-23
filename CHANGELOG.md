@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/dodjango/tasmota-auto-updater/compare/v0.5.0...v0.5.1) (2026-07-23)
+
+
+### Bug Fixes
+
+* **ui:** refresh device card after a successful update ([#84](https://github.com/dodjango/tasmota-auto-updater/issues/84)) ([5e9ea1d](https://github.com/dodjango/tasmota-auto-updater/commit/5e9ea1d3ff6364712cd3a1546164522b3f2261e6))
+
 ## [0.5.0](https://github.com/dodjango/tasmota-auto-updater/compare/v0.4.0...v0.5.0) (2026-07-23)
 
 
