@@ -72,6 +72,14 @@ Summary-Zählung.
 `docs/threat-models/`; README (LAN-only, Klartext-HTTP-Restrisiko);
 Betreiber-Fragen (Reverse-Proxy? Internet-exponiert?) klären.
 
+### Querschnitt — Test-Strategie & Playwright-E2E · #76
+Vollständige Test-Pyramide als Ziel: **Unit** (updater/utils/Schemas) +
+**Integration** (Flask-Test-Client gegen `/api/*`) + **E2E** (Playwright, headless
+Chromium, gegen die App mit Fake-Devices). Harness ist gebootstrappt
+(`tests/e2e/`, eigener E2E-CI-Job, Selenium ersetzt). Regel: **jede Feature-Phase
+liefert ihre Testebene mit** (Phase 1 → Auth-Integration + Auth-E2E; Phase 3 →
+Update-Flow-E2E). E2E-Job wird Required Check, sobald stabil.
+
 ## Empfohlene Reihenfolge
 Phase 0 → Phase 1 → (Threat-Model-Stub) → Phase 2 → Phase 3 → Phase 4 → Phase 5.
 

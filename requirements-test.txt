@@ -18,9 +18,8 @@ faker>=19.0.0
 freezegun>=1.2.0
 testcontainers>=3.7.0
 
-# Frontend testing (Selenium)
-selenium>=4.11.0
-webdriver-manager>=3.9.0
+# End-to-end / browser testing (Playwright)
+pytest-playwright>=0.5.0
 
 # Performance and memory profiling
 psutil>=5.9.0
