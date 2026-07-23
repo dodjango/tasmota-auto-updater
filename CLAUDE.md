@@ -139,8 +139,10 @@ When making changes:
 - **Tests:** `pyproject.toml` is the single pytest config (don't add a second). Green core: `pytest --ignore=tests/e2e -m "not stale and not slow and not integration and not browser and not docker"`. `stale` = outdated-vs-code tests (excluded; backlog #63).
 - **E2E:** `tests/e2e/` = pytest-playwright against a subprocess app with fake devices (`DEVICES_FILE=devices-dev.yaml`); separate CI job (chromium cached at `~/.cache/ms-playwright`).
 - **Required checks on `main`:** CodeQL + `pytest (3.10/3.11/3.12)` (e2e not yet required).
-- **release-please:** squash-merge PR titles MUST be valid conventional commits or no release is cut. Release PRs are bot-authored → approve their `action_required` Tests run (`gh api -X POST repos/<r>/actions/runs/<id>/approve`) before required checks report.
+- **release-please:** squash-merge PR titles MUST be valid conventional commits or no release is cut. Release PRs are bot-authored → approve their `action_required` Tests run (`gh api -X POST repos/<r>/actions/runs/<id>/approve`) before required checks report; if a bot-PR's later pushes don't trigger CI, `gh pr close` + `gh pr reopen` re-triggers it.
+- **CI flakiness:** a runner job occasionally sticks in `in_progress` while its run shows `completed` → re-run just that job with `gh run rerun --job <id>`.
 - **Runtime:** single gthread Gunicorn worker (`gunicorn.conf.py`) required — the batch-job store (`app/tasmota/jobs.py`) is in-memory. Batch updates async: `POST /api/update/all` → `202 {job_id}`, poll `GET /api/jobs/<id>`; single `POST /api/update` still sync. `SESSION_COOKIE_SECURE=false` for plain-HTTP LAN.
+- **Frontend/UI:** after a device-changing action, refresh `device.status` via `fetchDeviceStatus()`/`refreshDevices()` — updating only `device.update_status` leaves the card's version/tag stale (fix #84). The batch path already re-fetches via `refreshDevices()`.
 - **Env:** corporate TLS proxy blocks external npm/CDN fetches (no release-please dry-run, no SRI/`playwright install` from scratch); pip/uv work.
 
 The application supports development without physical Tasmota devices through the fake device system, allowing full feature testing in isolation.
