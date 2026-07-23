@@ -83,4 +83,6 @@ jobs:
         run: .venv/bin/python -m playwright install --with-deps chromium
 
       - name: Run end-to-end tests (fake devices)
-        run: .venv/bin/python -m pytest tests/e2e -m e2e --timeout=120
+        # -o addopts="" drops the unit-suite coverage flags (pointless here: the
+        # app runs in a subprocess, so in-process coverage measures nothing).
+        run: .venv/bin/python -m pytest tests/e2e -m e2e -o addopts="" --timeout=120
