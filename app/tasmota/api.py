@@ -293,6 +293,9 @@ class DeviceUpdateResource(Resource):
         """
         # Validate request data
         schema = DeviceUpdateSchema()
+        if not request.is_json:
+            return {'error': 'Invalid request',
+                    'details': 'Content-Type must be application/json'}, 415
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
             return {'error': 'Invalid request',
@@ -323,6 +326,10 @@ class DeviceUpdateResource(Resource):
                 current_app.logger.info(f"Using timeout override: {timeout}s for device {device_ip}")
 
             # Update device firmware with enhanced timeout handling
+            current_app.logger.info(
+                f"Firmware update requested for {device_ip} "
+                f"(check_only={check_only}) from {request.remote_addr}"
+            )
             result = update_device_firmware(device_config, check_only)
         else:
             return {'error': 'Device not found'}, 404
@@ -416,10 +423,18 @@ class AllDevicesUpdateResource(Resource):
         devices = load_devices_from_file(devices_file)
         
         # Extract parameters
+        if not request.is_json:
+            return {'error': 'Invalid request',
+                    'details': 'Content-Type must be application/json'}, 415
         payload = request.get_json(silent=True) or {}
         check_only = payload.get('check_only', False)
         update_only_needed = payload.get('update_only_needed', True)
         global_timeout = payload.get('timeout')
+
+        current_app.logger.info(
+            f"Batch firmware update requested (check_only={check_only}, "
+            f"update_only_needed={update_only_needed}) from {request.remote_addr}"
+        )
 
         if global_timeout is not None:
             if global_timeout < 60 or global_timeout > 600:

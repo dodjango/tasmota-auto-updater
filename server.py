@@ -10,7 +10,7 @@ import logging
 import secrets
 from pathlib import Path
 from dotenv import load_dotenv
-from flask import Flask, render_template, send_from_directory, jsonify, request
+from flask import Flask, render_template, send_from_directory, jsonify, request, session
 from flask_cors import CORS
 from flasgger import Swagger
 from app.tasmota.api import init_api
@@ -64,6 +64,7 @@ def create_app(test_config=None):
         # Security settings
         SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() in ('true', '1', 't'),
         SESSION_COOKIE_HTTPONLY=os.environ.get('SESSION_COOKIE_HTTPONLY', 'true').lower() in ('true', '1', 't'),
+        SESSION_COOKIE_SAMESITE='Strict',
         SWAGGER={
             'title': 'Tasmota Updater API',
             'description': 'API for managing and updating Tasmota devices',
@@ -91,21 +92,32 @@ def create_app(test_config=None):
             "(set CORS_ORIGINS to allow cross-origin API clients)"
         )
 
-    # Optional API-key authentication for the REST API. When API_KEY is set,
-    # every /api/* request must present a matching X-API-Key header.
+    # Access control for the REST API (fail-closed). Every /api/* request must
+    # come from either the bundled same-origin UI (signed, HttpOnly,
+    # SameSite=Strict session cookie set on GET /) or a programmatic client
+    # presenting a valid X-API-Key. Requests with neither are rejected (401).
     api_key = os.environ.get('API_KEY', '').strip()
+
+    @app.before_request
+    def _require_api_auth():
+        if not request.path.startswith('/api/'):
+            return None
+        # 1) Browser UI: signed session cookie (SameSite=Strict → CSRF-safe).
+        if session.get('ui_authenticated'):
+            return None
+        # 2) Programmatic client: constant-time X-API-Key comparison.
+        if api_key:
+            provided = request.headers.get('X-API-Key', '')
+            if hmac.compare_digest(provided.encode('utf-8'), api_key.encode('utf-8')):
+                return None
+        return jsonify({'error': 'Unauthorized'}), 401
+
     if api_key:
-        @app.before_request
-        def _require_api_key():
-            if request.path.startswith('/api/'):
-                provided = request.headers.get('X-API-Key', '')
-                if not hmac.compare_digest(provided.encode('utf-8'), api_key.encode('utf-8')):
-                    return jsonify({'error': 'Unauthorized'}), 401
-        logger.info("API key authentication enabled for /api/* endpoints")
+        logger.info("API auth: UI session cookie or X-API-Key required for /api/*")
     else:
-        logger.warning(
-            "API_KEY is not set; the REST API is unauthenticated. "
-            "Set API_KEY to require an X-API-Key header for /api/* requests."
+        logger.info(
+            "API auth: UI session cookie required for /api/* "
+            "(set API_KEY to also allow programmatic X-API-Key clients)"
         )
     
     # Initialize Swagger
@@ -126,7 +138,11 @@ def create_app(test_config=None):
     # Main route
     @app.route('/')
     def index():
-        """Serve the main application page"""
+        """Serve the main application page and establish a UI session."""
+        # Mark this browser as an authenticated UI client. The cookie is signed
+        # (SECRET_KEY), HttpOnly and SameSite=Strict, so JavaScript cannot read
+        # it and a cross-site request will not send it (CSRF-safe).
+        session['ui_authenticated'] = True
         return render_template('index.html')
     
     # Favicon route

@@ -28,7 +28,13 @@ services:
       - HOST=0.0.0.0
       - PORT=5001
       # Security settings
-      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-true}
+      # Keep false for plain-HTTP LAN use, otherwise the browser drops the UI
+      # session cookie and the web UI can no longer reach the API. Set true only
+      # when serving behind HTTPS/TLS.
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
+      # API_KEY is optional: the web UI authenticates via its session cookie.
+      # Set a strong API_KEY only to allow programmatic X-API-Key clients.
+      - API_KEY=${API_KEY:-}
       - SESSION_COOKIE_HTTPONLY=${SESSION_COOKIE_HTTPONLY:-true}
       - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
       # No need to load .env in production container, use environment variables from compose.yml instead
