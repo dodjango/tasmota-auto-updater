@@ -280,189 +280,136 @@ function tasmotaApp() {
             }
         },
         
+        // Poll a background job until it reaches a terminal state, invoking
+        // onProgress(job) on each tick. Returns the final job snapshot.
+        async _pollJob(jobId, onProgress) {
+            while (true) {
+                const resp = await fetch(`/api/jobs/${jobId}`);
+                if (!resp.ok) {
+                    throw new Error(`Failed to poll job status: ${resp.statusText}`);
+                }
+                const job = await resp.json();
+                if (onProgress) onProgress(job);
+                if (job.status === 'completed' || job.status === 'error') {
+                    return job;
+                }
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+        },
+
         async updateAllDevices() {
             this.isUpdatingAll = true;
-            this.updateProgress = {
-                total: 0,
-                completed: 0,
-                inProgress: 0,
-                failed: 0,
-                percentage: 0
-            };
-            
-            // Get user preference for update filtering
-            const updateOnlyNeeded = localStorage.getItem('update_only_needed') !== 'false';
-            const timeoutValue = 60; // Default to 60 seconds for batch updates
+            this.error = '';
+            this.updateProgress = { total: 0, completed: 0, inProgress: 0, failed: 0, percentage: 0 };
 
+            const updateOnlyNeeded = localStorage.getItem('update_only_needed') !== 'false';
             try {
-                // First, mark all devices as pending update
+                // Mark candidate devices as pending update
                 this.devices.forEach(device => {
-                    if (updateOnlyNeeded && !device.update_status?.needs_update) {
-                        return;
-                    }
+                    if (updateOnlyNeeded && !device.update_status?.needs_update) return;
                     device.update_in_progress = true;
                     device.update_completed = false;
                     device.update_message = 'Pending update...';
-                    this.updateProgress.total++;
                 });
-                
-                // Create an AbortController
-                const controller = new AbortController();
-                
-                // Set up timeout
-                const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
-                
-                const response = await fetch('/api/update/all', {
+
+                // Start the background job (returns 202 + job id immediately)
+                const startResp = await fetch('/api/update/all', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        check_only: false,
-                        update_only_needed: updateOnlyNeeded
-                    }),
-                    signal: controller.signal
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ check_only: false, update_only_needed: updateOnlyNeeded })
                 });
-                
-                // Clear timeout since fetch completed
-                clearTimeout(timeoutId);
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to update devices: ${response.statusText}`);
+                if (startResp.status === 409) {
+                    throw new Error('A batch operation is already in progress.');
                 }
-                
-                const result = await response.json();
-                
-                // Update progress information
-                // Get the count of devices that need updates or are being updated
-                this.updateProgress.total = result.summary.needs_update > 0 ? result.summary.needs_update : this.updateProgress.total;
-                
-                this.updateProgress = {
-                    total: this.updateProgress.total, // Use the count of devices that need updates
-                    completed: result.summary.updated,
-                    inProgress: result.results.filter(r => r.update_started && !r.update_completed).length,
-                    failed: result.results.filter(r => r.update_started && !r.success).length,
-                    percentage: this.updateProgress.total > 0 ? 
-                        Math.round((result.summary.updated / this.updateProgress.total) * 100) : 0
-                };
-                
-                // Update the status of each device
-                result.results.forEach(updateResult => {
-                    const device = this.devices.find(d => d.ip === updateResult.ip);
-                    if (device) {
-                        device.update_status = updateResult;
-                        device.update_in_progress = updateResult.update_started && !updateResult.update_completed;
-                        device.update_completed = updateResult.update_completed;
-                        device.update_message = updateResult.message;
-                        
-                        // Add timeout information
-                        if (updateResult.timeout_seconds) {
-                            device.timeout_seconds = updateResult.timeout_seconds;
+                if (startResp.status !== 202 && !startResp.ok) {
+                    throw new Error(`Failed to start update: ${startResp.statusText}`);
+                }
+                const { job_id } = await startResp.json();
+
+                // Poll for real server-side progress
+                const job = await this._pollJob(job_id, (j) => {
+                    const total = j.total || 0;
+                    const completed = j.completed || 0;
+                    this.updateProgress = {
+                        total,
+                        completed,
+                        inProgress: Math.max(0, total - completed),
+                        failed: j.failed || 0,
+                        percentage: total > 0 ? Math.round((completed / total) * 100) : 0
+                    };
+                    (j.results || []).forEach(r => {
+                        const device = this.devices.find(d => d.ip === r.ip);
+                        if (device) {
+                            device.update_status = r;
+                            device.update_in_progress = r.update_started && !r.update_completed;
+                            device.update_completed = r.update_completed;
+                            device.update_message = r.message;
                         }
-                    }
+                    });
                 });
-                
-                // Show success message with summary
-                this.success = `Update completed: ${result.summary.updated} devices updated, ` + 
-                              `${result.summary.needs_update - result.summary.updated} devices failed or timed out.`;
-                
-                // Refresh device statuses after a delay
-                setTimeout(() => this.refreshDevices(), 5000);
+
+                if (job.status === 'error') {
+                    throw new Error(job.error || 'Batch update failed');
+                }
+                const summary = job.summary || { updated: 0, needs_update: 0 };
+                const failed = Math.max(0, (summary.needs_update || 0) - (summary.updated || 0));
+                this.success = `Update completed: ${summary.updated || 0} device(s) updated`
+                    + (failed ? `, ${failed} failed or skipped.` : '.');
+
+                setTimeout(() => this.refreshDevices(), 3000);
             } catch (error) {
                 console.error('Error updating all devices:', error);
-                
-                if (error.name === 'AbortError') {
-                    console.error(`Batch update operation timed out after ${timeoutValue}s`);
-                    this.error = `Batch update operation timed out after ${timeoutValue}s. Individual device updates may still be in progress.`;
-                } else {
-                    this.error = `Failed to update devices: ${error.message}`;
-                }
-                
-                // Reset update progress status for all devices
-                this.devices.forEach(device => {
-                    device.update_in_progress = false;
-                });
+                this.error = `Failed to update devices: ${error.message}`;
+                this.devices.forEach(device => { device.update_in_progress = false; });
             } finally {
                 this.isUpdatingAll = false;
             }
         },
-        
+
         async checkAllDevices() {
             this.isCheckingAll = true;
-            
-            // Set all devices to checking state
-            this.devices.forEach(device => {
-                device.isChecking = true;
-            });
-            
-            const timeoutValue = 60; // Default to 60 seconds for batch checks
+            this.error = '';
+            this.devices.forEach(device => { device.isChecking = true; });
+
             try {
-                // Create an AbortController
-                const controller = new AbortController();
-                
-                // Set up timeout
-                const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
-                
-                const response = await fetch('/api/update/all', {
+                const startResp = await fetch('/api/update/all', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        check_only: true
-                    }),
-                    signal: controller.signal
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ check_only: true })
                 });
-                
-                // Clear timeout since fetch completed
-                clearTimeout(timeoutId);
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to check devices: ${response.statusText}`);
+                if (startResp.status === 409) {
+                    throw new Error('A batch operation is already in progress.');
                 }
-                
-                const result = await response.json();
+                if (startResp.status !== 202 && !startResp.ok) {
+                    throw new Error(`Failed to start check: ${startResp.statusText}`);
+                }
+                const { job_id } = await startResp.json();
+
+                const job = await this._pollJob(job_id);
+                if (job.status === 'error') {
+                    throw new Error(job.error || 'Batch check failed');
+                }
+
                 const currentTime = new Intl.DateTimeFormat(navigator.language, {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
                 }).format(new Date());
-                
-                // Update the status of each device
-                result.results.forEach(updateResult => {
-                    const device = this.devices.find(d => d.ip === updateResult.ip);
+                (job.results || []).forEach(r => {
+                    const device = this.devices.find(d => d.ip === r.ip);
                     if (device) {
-                        device.update_status = updateResult;
+                        device.update_status = r;
                         device.lastChecked = currentTime;
                     }
                 });
-                
-                // Set success indicator for all devices
-                this.devices.forEach(device => {
-                    device.checkSuccess = true;
-                });
-                
-                // Clear success indicator after delay
+
+                this.devices.forEach(device => { device.checkSuccess = true; });
                 setTimeout(() => {
-                    this.devices.forEach(device => {
-                        device.checkSuccess = false;
-                    });
+                    this.devices.forEach(device => { device.checkSuccess = false; });
                 }, 2000);
-                
             } catch (error) {
                 console.error('Error checking all devices:', error);
-                
-                if (error.name === 'AbortError') {
-                    console.error(`Batch check operation timed out after ${timeoutValue}s`);
-                    this.error = `Batch check operation timed out after ${timeoutValue}s. Some devices may not have been checked.`;
-                } else {
-                    this.error = `Failed to check devices: ${error.message}`;
-                }
+                this.error = `Failed to check devices: ${error.message}`;
             } finally {
-                // Clear checking state for all devices
-                this.devices.forEach(device => {
-                    device.isChecking = false;
-                });
+                this.devices.forEach(device => { device.isChecking = false; });
                 this.isCheckingAll = false;
             }
         },

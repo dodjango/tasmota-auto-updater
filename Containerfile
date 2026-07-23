@@ -44,7 +44,7 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PORT=5001
 
 # Copy only necessary application files
-COPY server.py wsgi.py /app/
+COPY server.py wsgi.py gunicorn.conf.py /app/
 COPY app/ /app/app/
 
 # Create non-root user and set permissions
@@ -66,4 +66,4 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Command to run the application with Gunicorn in production
 # Use shell form to allow environment variable substitution
-CMD gunicorn --bind 0.0.0.0:5001 --workers ${GUNICORN_WORKERS:-4} --access-logfile - --error-logfile - wsgi:app
+CMD gunicorn -c gunicorn.conf.py wsgi:app
