@@ -256,8 +256,11 @@ function tasmotaApp() {
                     if (device.fake) {
                         await new Promise(resolve => setTimeout(resolve, 3000));
                     }
-                    // Check update status again
-                    await this.checkDeviceUpdate(device);
+                    // Re-fetch the full device status so the card shows the new
+                    // firmware version and re-evaluates the "Update Available" tag
+                    // (checkDeviceUpdate alone updates update_status but not
+                    // device.status.version, leaving a stale version on the card).
+                    await this.fetchDeviceStatus(device);
                 } else {
                     // Update failed
                     device.update_message = device.update_status.message || 'Update failed';
