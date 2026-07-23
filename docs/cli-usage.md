@@ -1,5 +1,13 @@
 # Command-Line Usage Guide
 
+> **⚠️ Deprecated.** The command-line interface is deprecated and no longer
+> maintained. It duplicated (and had drifted out of sync with) the core update
+> logic. Use the **Web Interface** (`python server.py` or the container image)
+> or the **REST API** (`POST /api/update`, `POST /api/update/all`) instead —
+> both share the maintained core in `app/tasmota`. Running `tasmota_updater.py`
+> now only prints a deprecation notice and exits. The content below is retained
+> for historical reference.
+
 The Tasmota Remote Updater includes a powerful command-line interface that allows you to update multiple devices at once, check firmware versions, and more.
 
 ## Basic Usage
