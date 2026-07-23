@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/dodjango/tasmota-auto-updater/compare/v0.4.0...v0.5.0) (2026-07-23)
+
+
+### Features
+
+* async background jobs for batch device updates ([#80](https://github.com/dodjango/tasmota-auto-updater/issues/80)) ([e4787ab](https://github.com/dodjango/tasmota-auto-updater/commit/e4787ab949bed9fd666a091be52429446d9812c5)), closes [#70](https://github.com/dodjango/tasmota-auto-updater/issues/70)
+
 ## [0.4.0](https://github.com/dodjango/tasmota-auto-updater/compare/v0.3.1...v0.4.0) (2026-07-23)
 
 
