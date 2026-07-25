@@ -133,6 +133,7 @@ When making changes:
 3. Verify API endpoints via Swagger UI
 4. Use conventional commit messages (release-please derives the version)
 5. Update documentation in `docs/` directory as needed
+6. **Check `README.md` before opening any PR** — including Dependabot/Renovate PRs, where it should be reviewed together with the maintainer. It drifts unnoticed because nothing in a normal diff touches it: a dependency bump can silently invalidate a badge or a minimum version, and broken markdown never fails a test. Verify code fences are balanced (`grep -c '^```' README.md` must be even), plus badges, the clone URL, ports, commands, and that deprecated paths aren't presented as current. Careful when "correcting" names: the container images really are `dodjango/tasmota-updater` (both registries, see `publish-container.yml`) while the *git* repo is `dodjango/tasmota-auto-updater`.
 
 ## CI, Testing & Gotchas
 
