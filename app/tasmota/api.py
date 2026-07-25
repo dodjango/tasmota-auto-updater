@@ -287,6 +287,27 @@ class DeviceUpdateResource(Resource):
                     error_type:
                       type: string
                       description: Type of error encountered
+                version_verification:
+                  type: object
+                  description: >
+                    Result of verifying that the device actually runs a new firmware
+                    version after the update. Reachability alone is not proof of a
+                    completed update, so success is only reported once the reported
+                    version changed. error_type is "version_unchanged" when the device
+                    came back online but kept reporting the previous version.
+                  properties:
+                    elapsed_time:
+                      type: number
+                      description: Time spent waiting for the version to change
+                    attempts:
+                      type: integer
+                      description: Number of version reads performed
+                    timed_out:
+                      type: boolean
+                      description: Whether the version never changed in time
+                    error_type:
+                      type: string
+                      description: '"none" or "version_unchanged"'
           400:
             description: Invalid request
           500:

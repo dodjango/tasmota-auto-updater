@@ -27,3 +27,9 @@ def test_single_update_refetches_device_status(page: Page, app_server: str):
         page.get_by_role("button", name="Update", exact=True).click()  # confirm modal
 
     expect(page.get_by_text("Update completed successfully").first).to_be_visible(timeout=10000)
+
+    # The status refetch has settled by now. A fake device keeps reporting its
+    # original version, so the "still offers an update" warning must stay away —
+    # it is reserved for real devices that came back on the old firmware.
+    page.wait_for_timeout(1000)
+    expect(page.get_by_text("still offers an update")).to_have_count(0)
