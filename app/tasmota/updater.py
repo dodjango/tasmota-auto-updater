@@ -188,13 +188,42 @@ def build_device_url(device_config, path="/cm"):
     if not path.startswith('/'):
         path = '/' + path
         
-    # Build the URL
+    # Build the URL. Credentials are deliberately NOT embedded here — they are
+    # passed separately via build_device_auth() so they never become part of a URL
+    # string that could end up in logs, exception messages or response.url, and so
+    # that characters like ':' or '@' in a password cannot corrupt the URL.
     if username and password:
-        # For security, don't log the actual URL with credentials
         logger.debug(f"Building URL for {ip_address} with authentication")
-        return f"http://{username}:{password}@{ip_address}{path}"
-    else:
-        return f"http://{ip_address}{path}"
+
+    return f"http://{ip_address}{path}"
+
+
+def build_device_auth(device_config) -> Optional[Tuple[str, str]]:
+    """
+    Build the HTTP basic auth credentials for a Tasmota device
+
+    Companion to build_device_url(): pass the result as the `auth` argument of the
+    request. This produces the same Authorization header that embedding
+    `user:password@host` in the URL used to produce, without putting the password
+    into the URL itself.
+
+    Args:
+        device_config (dict or str): Device configuration dictionary, or a plain IP
+            address string (which carries no credentials)
+
+    Returns:
+        Tuple of (username, password), or None if the device needs no authentication
+    """
+    if not isinstance(device_config, dict):
+        return None
+
+    username = device_config.get('username')
+    password = device_config.get('password')
+
+    if username and password:
+        return (username, password)
+
+    return None
 
 
 def get_dns_name(device_config):
@@ -292,7 +321,12 @@ def get_device_firmware_version(device_config: Dict[str, Any]) -> Optional[Dict[
     
     try:
         logger.debug(f"{ip_address}: Requesting firmware version information")
-        response = requests.get(base_url, params=params, timeout=timeout)
+        response = requests.get(
+            base_url,
+            params=params,
+            timeout=timeout,
+            auth=build_device_auth(device_config)
+        )
         
         if response.status_code == 200:
             try:
@@ -385,7 +419,8 @@ def verify_device_restart_with_backoff(
             response = requests.get(
                 base_url,
                 timeout=timeout_config.request_timeout,
-                params={"cmnd": "Status"}  # Simple status check
+                params={"cmnd": "Status"},  # Simple status check
+                auth=build_device_auth(device_config)
             )
 
             if response.status_code == 200:
@@ -939,7 +974,8 @@ def update_device_firmware(device_config: Dict[str, Any], check_only: bool = Fal
             response = requests.get(
                 base_url,
                 params=params,
-                timeout=timeout_config.request_timeout
+                timeout=timeout_config.request_timeout,
+                auth=build_device_auth(device_config)
             )
         except requests.exceptions.Timeout:
             elapsed_time = time.time() - start_time
