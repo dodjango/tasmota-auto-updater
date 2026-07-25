@@ -211,13 +211,19 @@ function tasmotaApp() {
             
             // Set update in progress flags for UI indicator
             device.update_in_progress = true;
+            device.update_completed = false;
+            device.update_verified = true;
+            device.update_result_message = '';
             device.update_message = 'Pending update...';
-            
+
             try {
                 // Create an AbortController
+                // The server waits for the device to actually report the new firmware
+                // version before answering, so it may take up to its full total_timeout
+                // (backend default 240s). Stay above that or we abort a running update.
                 const controller = new AbortController();
-                const timeoutValue = device.timeout || 60; // Default to 60 seconds for firmware updates
-                
+                const timeoutValue = (device.timeout || 240) + 30;
+
                 // Set up timeout
                 const timeoutId = setTimeout(() => controller.abort(), timeoutValue * 1000);
                 
@@ -248,10 +254,10 @@ function tasmotaApp() {
                 }
                 
                 if (device.update_status.success) {
-                    // Update was successful, set completed status
+                    // The server only reports success once the device reports a new
+                    // firmware version, so the restart has already happened here.
                     device.update_completed = true;
-                    // if update_status.message is not empty, use it, otherwise use default message, always append "Pending restart..."
-                    device.update_message = device.update_status.message ? device.update_status.message + ', pending restart...' : 'Update completed, pending restart...';
+                    device.update_message = device.update_status.message || 'Update completed successfully';
                     // if it is a fake device, sleep 3 seconds
                     if (device.fake) {
                         await new Promise(resolve => setTimeout(resolve, 3000));
@@ -261,6 +267,17 @@ function tasmotaApp() {
                     // (checkDeviceUpdate alone updates update_status but not
                     // device.status.version, leaving a stale version on the card).
                     await this.fetchDeviceStatus(device);
+
+                    // Never show a success message next to an "Update Available" tag.
+                    // The server verifies the new version before reporting success, so
+                    // this only trips if the device reports something unexpected.
+                    // Fake devices are exempt: their simulated update never changes the
+                    // reported version, so they always still "need" an update.
+                    if (!device.fake && device.update_status && device.update_status.needs_update) {
+                        device.update_verified = false;
+                        device.update_result_message =
+                            'Update reported as successful, but the device still offers an update — please re-check';
+                    }
                 } else {
                     // Update failed
                     device.update_message = device.update_status.message || 'Update failed';
@@ -312,6 +329,8 @@ function tasmotaApp() {
                     if (updateOnlyNeeded && !device.update_status?.needs_update) return;
                     device.update_in_progress = true;
                     device.update_completed = false;
+                    device.update_verified = true;
+                    device.update_result_message = '';
                     device.update_message = 'Pending update...';
                 });
 

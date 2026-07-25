@@ -444,6 +444,116 @@ def verify_device_restart_with_backoff(
     )
 
 
+def verify_firmware_version_changed(
+    device_config: Dict[str, Any],
+    previous_version: str,
+    timeout_config: TimeoutConfig,
+    deadline: Optional[float] = None
+) -> Tuple[Optional[Dict[str, Any]], TimeoutReport]:
+    """
+    Verify that the device actually runs a different firmware version than before
+
+    Reachability is not proof of a completed update: Tasmota acknowledges
+    `Upgrade 1` with HTTP 200 and then downloads and flashes the firmware in the
+    background while it keeps serving requests on the OLD firmware. The new
+    version only runs after the device reboots, which happens seconds to minutes
+    after the command was accepted. Polling the reported version is therefore the
+    only reliable completion signal.
+
+    Args:
+        device_config: Device configuration dictionary
+        previous_version: Firmware version reported before the upgrade command
+        timeout_config: Timeout configuration (intervals and backoff)
+        deadline: Absolute monotonic-ish deadline (time.time() based). Defaults to
+            total_timeout seconds from now.
+
+    Returns:
+        Tuple of (new_firmware_info, timeout_report)
+        - new_firmware_info: Firmware info dict once the version changed, else None
+        - timeout_report: Details about the verification process
+    """
+    ip_address = device_config['ip']
+    start_time = time.time()
+
+    if deadline is None:
+        deadline = start_time + timeout_config.total_timeout
+
+    attempts = 0
+    current_interval = timeout_config.min_check_interval
+    last_seen_version = previous_version
+
+    logger.info(f"{ip_address}: Verifying the device runs a new firmware version "
+                f"(was {previous_version})")
+
+    while time.time() < deadline:
+        attempts += 1
+        firmware_info = get_device_firmware_version(device_config)
+
+        if firmware_info:
+            reported_version = firmware_info.get('version', 'Unknown')
+
+            # "Unknown" means we could not read the version, not that it changed
+            if reported_version not in ('Unknown', None, previous_version):
+                elapsed_time = time.time() - start_time
+                logger.info(f"{ip_address}: Firmware version changed to {reported_version} "
+                            f"after {elapsed_time:.1f}s ({attempts} attempts)")
+
+                return firmware_info, TimeoutReport(
+                    total_timeout=timeout_config.total_timeout,
+                    elapsed_time=elapsed_time,
+                    phase=TimeoutPhase.FIRMWARE_FLASH,
+                    attempts=attempts,
+                    last_check_interval=current_interval,
+                    timed_out=False,
+                    error_type="none",
+                    details={
+                        "success": True,
+                        "previous_version": previous_version,
+                        "new_version": reported_version
+                    }
+                )
+
+            last_seen_version = reported_version
+            logger.debug(f"{ip_address}: Attempt {attempts}: still reporting "
+                         f"{reported_version}, update not applied yet")
+        else:
+            logger.debug(f"{ip_address}: Attempt {attempts}: version unreadable "
+                         f"(device likely rebooting)")
+
+        # Don't sleep past the deadline
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            break
+        time.sleep(min(current_interval, remaining))
+
+        current_interval = min(
+            current_interval * timeout_config.backoff_multiplier,
+            timeout_config.max_check_interval
+        )
+
+    elapsed_time = time.time() - start_time
+    logger.warning(f"{ip_address}: Firmware version did not change within {elapsed_time:.1f}s "
+                   f"({attempts} attempts, still reporting {last_seen_version})")
+
+    return None, TimeoutReport(
+        total_timeout=timeout_config.total_timeout,
+        elapsed_time=elapsed_time,
+        phase=TimeoutPhase.FIRMWARE_FLASH,
+        attempts=attempts,
+        last_check_interval=current_interval,
+        timed_out=True,
+        error_type="version_unchanged",
+        details={
+            "message": (
+                f"Device is reachable but still reports version {last_seen_version} "
+                f"after {elapsed_time:.0f} seconds"
+            ),
+            "previous_version": previous_version,
+            "last_seen_version": last_seen_version
+        }
+    )
+
+
 def create_timeout_config(device_config: Dict[str, Any]) -> TimeoutConfig:
     """
     Create timeout configuration from device config with validation
@@ -728,9 +838,10 @@ def update_device_firmware(device_config: Dict[str, Any], check_only: bool = Fal
             "min_check_interval": timeout_config.min_check_interval,
             "max_check_interval": timeout_config.max_check_interval
         },
-        "timeout_report": None
+        "timeout_report": None,
+        "version_verification": None
     }
-    
+
     # Get current firmware version
     firmware_info = get_device_firmware_version(device_config)
     if not firmware_info:
@@ -852,16 +963,34 @@ def update_device_firmware(device_config: Dict[str, Any], check_only: bool = Fal
         result["timeout_report"] = timeout_report.to_dict()
 
         if restart_success:
-            # Device is back online - get new firmware version
-            result["success"] = True
-            result["message"] = "Firmware update completed successfully"
-
+            # The device answers again — but that only proves it is reachable, not
+            # that the new firmware is running. Wait for the reported version to
+            # actually change before claiming success.
             logger.info(f"{device_ip}: Verifying firmware update completion")
-            new_firmware_info = get_device_firmware_version(device_config)
+            new_firmware_info, version_report = verify_firmware_version_changed(
+                device_config,
+                previous_version=firmware_info["version"],
+                timeout_config=timeout_config,
+                deadline=start_time + timeout_config.total_timeout
+            )
+            result["version_verification"] = version_report.to_dict()
+
             if new_firmware_info:
+                result["success"] = True
+                result["message"] = "Firmware update completed successfully"
                 result["current_version"] = new_firmware_info["version"]
+                # Re-evaluate so the UI stops offering an update that already ran
+                result["needs_update"] = compare_versions(
+                    new_firmware_info["version"], latest_release["version"]
+                )
                 logger.info(f"{device_ip}: New firmware version: {new_firmware_info['version']}")
             else:
+                last_seen = version_report.details.get("last_seen_version", "unknown")
+                result["message"] = (
+                    f"Firmware update was initiated, but the device is still running "
+                    f"version {last_seen} after {timeout_config.total_timeout} seconds. "
+                    f"The update may have failed or may still be in progress."
+                )
                 logger.warning(f"{device_ip}: Could not verify new firmware version")
         else:
             # Timeout or other error during restart verification
