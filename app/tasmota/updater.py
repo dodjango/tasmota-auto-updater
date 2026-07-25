@@ -444,6 +444,28 @@ def verify_device_restart_with_backoff(
     )
 
 
+def log_safe_address(ip_address: Any) -> str:
+    """
+    Normalize a device address for log output
+
+    Devices are addressed by IP — build_device_url() rejects anything else — so the
+    value is re-created from a validated ipaddress object instead of being taken
+    straight out of the device configuration. That normalizes the representation,
+    prevents a crafted address from forging log lines, and keeps the
+    credential-bearing device_config out of the logging data flow.
+
+    Args:
+        ip_address: Address as configured for the device
+
+    Returns:
+        Normalized address, or a placeholder if it is not a valid IP
+    """
+    try:
+        return format(ipaddress.ip_address(str(ip_address).strip()))
+    except ValueError:
+        return '<invalid-address>'
+
+
 def verify_firmware_version_changed(
     device_config: Dict[str, Any],
     previous_version: str,
@@ -472,7 +494,7 @@ def verify_firmware_version_changed(
         - new_firmware_info: Firmware info dict once the version changed, else None
         - timeout_report: Details about the verification process
     """
-    ip_address = device_config['ip']
+    ip_address = log_safe_address(device_config['ip'])
     start_time = time.time()
 
     if deadline is None:

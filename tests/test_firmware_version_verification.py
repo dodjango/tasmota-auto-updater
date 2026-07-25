@@ -17,6 +17,7 @@ from app.tasmota.updater import (
     TimeoutConfig,
     TimeoutReport,
     TimeoutPhase,
+    log_safe_address,
     update_device_firmware,
     verify_firmware_version_changed,
 )
@@ -64,6 +65,25 @@ def restart_verified_report(total_timeout=240):
 @pytest.fixture
 def clock():
     return FakeClock()
+
+
+class TestLogSafeAddress:
+    """The address used in log messages is normalized, never taken verbatim."""
+
+    def test_normalizes_a_valid_address(self):
+        assert log_safe_address(" 192.168.8.191 ") == "192.168.8.191"
+
+    def test_normalizes_ipv6(self):
+        assert log_safe_address("FE80::1") == "fe80::1"
+
+    @pytest.mark.parametrize("value", [
+        "192.168.8.191\nfake log line",  # would forge an extra log record
+        "not-an-ip",
+        "",
+        None,
+    ])
+    def test_replaces_anything_that_is_not_an_ip(self, value):
+        assert log_safe_address(value) == "<invalid-address>"
 
 
 class TestVerifyFirmwareVersionChanged:
