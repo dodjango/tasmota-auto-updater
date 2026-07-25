@@ -134,8 +134,13 @@
                                                 
                                                 <div class="tags mt-2">
                                                     <span x-show="device.status.is_minimal" class="tag is-warning">Minimal</span>
-                                                    <span x-show="device.update_status && device.update_status.needs_update" class="tag is-danger">Update Available</span>
-                                                    <span x-show="device.update_status && !device.update_status.needs_update" class="tag is-success">Up to Date</span>
+                                                    <span x-show="isVersionComparisonKnown(device) && device.update_status.needs_update" class="tag is-danger">Update Available</span>
+                                                    <span x-show="isVersionComparisonKnown(device) && !device.update_status.needs_update" class="tag is-success">Up to Date</span>
+                                                    <!-- No comparison happened (release lookup or version read failed) —
+                                                         showing "Up to Date" here would report a failure as healthy. -->
+                                                    <span x-show="device.update_status && !isVersionComparisonKnown(device)"
+                                                          class="tag is-warning"
+                                                          :title="device.update_status && device.update_status.message ? device.update_status.message : 'Could not determine the latest firmware version'">Version unknown</span>
                                                 </div>
                                                 
                                                 <!-- Update status indicator -->

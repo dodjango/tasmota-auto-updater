@@ -32,7 +32,19 @@ function tasmotaApp() {
             const host = device.dns_name || device.ip;
             return `http://${host}`;
         },
-        
+
+        // Whether the device's firmware was actually compared against a known
+        // latest release. When the release lookup (or the device version read)
+        // fails, the API returns needs_update: false with latest_version
+        // "Unknown" — that must not be shown as "Up to Date", because nothing
+        // was compared. Deliberately keyed on latest_version rather than
+        // success: a failed *update* still carries a known latest version.
+        isVersionComparisonKnown(device) {
+            const status = device.update_status;
+            return !!(status && status.latest_version && status.latest_version !== 'Unknown');
+        },
+
+
         // Computed properties
         get hasUpdatableDevices() {
             return this.devices.some(device => 
