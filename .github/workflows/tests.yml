@@ -85,4 +85,12 @@ jobs:
       - name: Run end-to-end tests (fake devices)
         # -o addopts="" drops the unit-suite coverage flags (pointless here: the
         # app runs in a subprocess, so in-process coverage measures nothing).
+        #
+        # GITHUB_TOKEN is required, not optional: the app looks up the latest
+        # Tasmota release from api.github.com on every run (the response cache is
+        # gitignored, so CI always starts cold). Unauthenticated that is 60 req/h
+        # per IP, shared across runners — when it 403s, no device "needs" an update
+        # and the update-flow tests fail with a misleading timeout.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: .venv/bin/python -m pytest tests/e2e -m e2e -o addopts="" --timeout=120
