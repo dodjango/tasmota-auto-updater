@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.2](https://github.com/dodjango/tasmota-auto-updater/compare/v0.5.1...v0.5.2) (2026-07-25)
+
+
+### Bug Fixes
+
+* **security:** pass device credentials via auth instead of the URL ([51da930](https://github.com/dodjango/tasmota-auto-updater/commit/51da930e44aa2134aa5e743b329d015f9ec82186))
+* verify the new firmware version before reporting update success ([6690305](https://github.com/dodjango/tasmota-auto-updater/commit/669030585a0173e27678a22e37a64d8be3cc0c4b)), closes [#87](https://github.com/dodjango/tasmota-auto-updater/issues/87)
+
 ## [0.5.1](https://github.com/dodjango/tasmota-auto-updater/compare/v0.5.0...v0.5.1) (2026-07-23)
 
 
