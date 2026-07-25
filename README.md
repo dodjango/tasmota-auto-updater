@@ -4,7 +4,7 @@
 > Keep your Tasmota devices up to date with a single command or click
 
 [![Semantic Versioning](https://img.shields.io/badge/semver-2.0.0-brightgreen)](https://semver.org)
-[![Python 3.6+](https://img.shields.io/badge/python-3.6+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Tasmota Remote Updater is a tool that automatically updates multiple Tasmota devices to the latest firmware over your network. No more manual updates or complex scripts - just point it at your devices and let it handle the rest.
@@ -24,8 +24,8 @@ Tasmota Remote Updater is a tool that automatically updates multiple Tasmota dev
 
 ```bash
 # Clone the repository
-git clone https://github.com/dodjango/tasmota-updater.git
-cd tasmota-updater
+git clone https://github.com/dodjango/tasmota-auto-updater.git
+cd tasmota-auto-updater
 
 # Create a virtual environment and install dependencies
 python -m venv venv
@@ -44,8 +44,8 @@ Then visit http://localhost:5001 in your browser.
 
 ```bash
 # Clone the repository and run with Docker or Podman
-git clone https://github.com/dodjango/tasmota-updater.git
-cd tasmota-updater
+git clone https://github.com/dodjango/tasmota-auto-updater.git
+cd tasmota-auto-updater
 
 # Using Docker
 docker compose up -d
@@ -67,6 +67,15 @@ docker run -d -p 5001:5001 \
   -v $(pwd)/devices.yaml:/app/devices.yaml \
   -v $(pwd)/logs:/app/logs \
   --name tasmota-updater dodjango/tasmota-updater:latest
+
+# OR run with Podman
+podman run -d -p 5001:5001 \
+  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/logs:/app/logs \
+  --name tasmota-updater dodjango/tasmota-updater:latest
+```
+
+Then visit http://localhost:5001 in your browser.
 
 ## 📚 Documentation
 
