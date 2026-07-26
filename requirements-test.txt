@@ -19,7 +19,7 @@ freezegun>=1.2.0
 testcontainers>=3.7.0
 
 # End-to-end / browser testing (Playwright)
-pytest-playwright>=0.5.0
+pytest-playwright>=0.8.0
 
 # Performance and memory profiling
 psutil>=5.9.0
