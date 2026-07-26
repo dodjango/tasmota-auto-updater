@@ -58,15 +58,42 @@ Rate-Limiting (schnell) + async Batch (Job-Queue, `202`+Status-Endpoint) +
 Echter Server-Fortschritt statt Fassade; Modal-a11y; Live-Batch-Balken;
 Concurrency-Limit; Bestätigungsdialog mit Geräteliste.
 
-### Phase 4 — CLI reparieren oder deprecaten · #72
-`tasmota_updater.py` ist durch Signatur-Mismatch + Doppel-Definitionen
-funktionsunfähig. Entscheidung: Kernfunktionen wiederverwenden **oder**
-deprecaten.
+### Phase 4 — CLI reparieren oder deprecaten · #72  ✅ erledigt (PR #82)
+`tasmota_updater.py` war durch Signatur-Mismatch + Doppel-Definitionen
+funktionsunfähig. **Entscheidung: deprecaten** — die ~900 Zeilen duplizierten
+die Update-Logik aus `app/tasmota` und waren davon weggelaufen. Heute ist die
+Datei ein Stub (Notice auf stderr, Exit 1).
 
-### Phase 5 — Architektur & Wartbarkeit · #73
+**Offen / Backlog — dünne CLI-Schicht für Automatisierungen.** Der
+Deprecation-Grund war die *Duplikation*, nicht der Nutzen: ein CLI ist für
+Cron/Skripte weiterhin sinnvoll (Wunsch des Users, 2026-07-26). Nachziehen als
+dünner Wrapper **über** dem gepflegten Kern in `app/tasmota` — keine zweite
+Kopie der Logik:
+
+- Optionen wie früher: `-f/--file`, `--check-only`, `--dry-run`, `--update-all`,
+  `--non-interactive`, `--log-level`.
+- Ruft `update_device_firmware()` / den Job-Runner direkt auf, ohne laufenden
+  Server und ohne API-Key (das ist der Vorteil gegenüber `curl` auf die REST-API).
+- Exit-Codes maschinenlesbar (0 = nichts zu tun / alles aktualisiert, ≠ 0 =
+  Fehler), Ausgabe optional als JSON für Weiterverarbeitung.
+- Tests: Unit über den Wrapper (Kern gemockt) + ein Smoke-Lauf gegen Fake-Devices.
+- `docs/cli-usage.md` und die README-Feature-Liste („Three powerful interfaces")
+  wieder in Einklang bringen.
+
+### Phase 5 — Architektur & Wartbarkeit · #73  (teilweise erledigt)
 `updater.py` entflechten; Cache-Locking über Worker; Excepts differenzieren;
-Verifikations-Korrektheit (200 ≠ Erfolg); Credentials via `HTTPBasicAuth`;
 Summary-Zählung.
+
+Zwei Punkte dieser Phase wurden vorgezogen, weil sie als Bugs im Betrieb
+auffielen (v0.5.2, PR #88 / Issue #87):
+
+- ✅ **Verifikations-Korrektheit (200 ≠ Erfolg)** — Tasmota quittiert `Upgrade 1`
+  sofort mit 200 und flasht im Hintergrund weiter auf der alten Firmware.
+  `verify_firmware_version_changed()` wartet jetzt auf die tatsächliche
+  Versionsänderung, statt Erreichbarkeit als Erfolg zu werten.
+- ✅ **Credentials via Basic-Auth statt URL** — `build_device_auth()` übergibt sie
+  am `auth`-Parameter; das Passwort steckt in keiner URL mehr (und ein `:`/`@`
+  im Passwort zerlegt sie nicht länger).
 
 ### Querschnitt — Threat-Model & Doku · #74
 `docs/threat-models/`; README (LAN-only, Klartext-HTTP-Restrisiko);
