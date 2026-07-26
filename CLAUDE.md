@@ -122,6 +122,26 @@ devices:
 - Docker Compose support with volume mounts for configuration
 - Published to both Docker Hub and GitHub Container Registry
 
+## Code Conventions
+
+- **Python**: functional and declarative; classes only where Flask/RESTful requires
+  them. PEP 8, type hints in signatures, docstrings. Guard clauses and early
+  returns instead of `else` branches. Prefer extracting a shared helper over
+  copying logic — the duplicated update logic is exactly what killed the CLI.
+- **Naming**: snake_case for files, directories and variables; auxiliary verbs for
+  booleans (`is_active`, `has_permission`).
+- **Frontend**: every interactive element gets a descriptive tooltip starting with
+  an action verb — mandatory for icon-only buttons, with an explicit warning for
+  destructive actions. Keep terminology consistent across the UI and make sure
+  controls are reachable and announced for screen readers.
+- **Tooling**: `uv` for the virtualenv and dependencies, `git`/`gh` CLI for version
+  control and GitHub (no web UI), `podman` for containers.
+- **Docs**: API endpoints documented via OpenAPI/Swagger including request and
+  response examples; every configuration option documented under `docs/`.
+
+Branch prefixes, commit format and the PR checklist live in
+`docs/contributing.md`; the release process in `docs/releasing.md`.
+
 ## Development Workflow
 
 When making changes:
