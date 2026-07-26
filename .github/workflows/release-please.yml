@@ -19,11 +19,34 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
+      # Release PRs must not be authored by GITHUB_TOKEN. GitHub deliberately
+      # does not run workflows for what that token creates ("events triggered by
+      # the GITHUB_TOKEN will not create a new workflow run"), so the required
+      # pytest checks never report on the release PR and it stays unmergeable
+      # until someone manually approves the parked workflow run — every release.
+      # A GitHub App is a separate identity, so CI runs on its PRs normally.
+      #
+      # Enable by setting both:
+      #   vars.RELEASE_APP_CLIENT_ID       (repository variable, not secret)
+      #   secrets.RELEASE_APP_PRIVATE_KEY  (repository secret)
+      # The App needs only Contents: R/W and Pull requests: R/W.
+      #
+      # Until the variable is set this step is skipped and the job falls back to
+      # GITHUB_TOKEN, i.e. the previous behaviour — so this is safe to merge
+      # before the App exists.
+      - name: Mint a GitHub App token
+        id: app-token
+        if: ${{ vars.RELEASE_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Run release-please
         id: release
         uses: googleapis/release-please-action@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
