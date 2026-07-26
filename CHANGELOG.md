@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/dodjango/tasmota-auto-updater/compare/v0.5.2...v0.5.3) (2026-07-26)
+
+
+### Bug Fixes
+
+* **ui:** don't show an unknown firmware version as "Up to Date" ([7065975](https://github.com/dodjango/tasmota-auto-updater/commit/70659752bdd9634d59f7c32fb29844c6aaab9c7b)), closes [#91](https://github.com/dodjango/tasmota-auto-updater/issues/91)
+
 ## [0.5.2](https://github.com/dodjango/tasmota-auto-updater/compare/v0.5.1...v0.5.2) (2026-07-25)
 
 
