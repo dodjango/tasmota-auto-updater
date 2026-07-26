@@ -1,7 +1,3 @@
----
-description: How releases work (automated via release-please)
----
-
 # Releasing a New Version
 
 Releases are **fully automated** by [release-please](https://github.com/googleapis/release-please)
