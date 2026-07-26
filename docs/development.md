@@ -31,9 +31,6 @@ tasmota-updater/
 │       ├── dependabot-auto-merge.yml  # Auto-merge for Dependabot PRs
 │       ├── publish-container.yml      # Container image publishing
 │       └── update-dockerhub-description.yml  # Update Docker Hub description
-├── .windsurf/             # Windsurf development tools
-│   └── workflows/         # Windsurf workflows
-│       └── release-version.md  # Release workflow
 ├── app/                   # Main application package
 │   ├── __init__.py        # Package initialization
 │   ├── static/            # Static assets (CSS, JS)
