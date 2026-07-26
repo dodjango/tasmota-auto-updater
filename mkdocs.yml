@@ -42,6 +42,7 @@ nav:
     - CLI Usage: cli-usage.md
     - API: api.md
   - Development: development.md
+  - Releasing: releasing.md
   - Troubleshooting: troubleshooting.md
   - Contributing: contributing.md
 

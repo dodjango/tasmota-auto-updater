@@ -27,4 +27,5 @@ This documentation will guide you through:
 - [API](api.md) - API documentation for developers
 - [Container Setup](container-setup.md) - Docker/Podman deployment
 - [Development](development.md) - Contributing to the project
+- [Releasing](releasing.md) - How releases are cut (automated via release-please)
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions

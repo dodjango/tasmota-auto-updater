@@ -89,6 +89,7 @@ Then visit http://localhost:5001 in your browser.
 - [Configuration Options](docs/configuration.md)
 - [Container Setup](docs/container-setup.md)
 - [Development Guide](docs/development.md)
+- [Releasing](docs/releasing.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Versioning](#versioning)
 
