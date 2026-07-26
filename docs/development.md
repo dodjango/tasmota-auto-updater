@@ -10,14 +10,13 @@ This project follows [Semantic Versioning 2.0.0](https://semver.org/). When maki
 - **MINOR version**: Increment when you add functionality in a backward-compatible manner
 - **PATCH version**: Increment when you make backward-compatible bug fixes
 
-The version is defined in `app/version.py` and should be updated as part of the release process. When releasing a new version, follow these steps:
+The version is defined in `app/version.py` and is served at `/version`. **Do not
+edit it by hand** — releases are automated with release-please, which derives the
+next version from the conventional commit messages on `main` and bumps
+`app/version.py`, `pyproject.toml` and `app/__init__.py` together with the
+changelog and the git tag.
 
-1. Update the version in `app/version.py`
-2. Commit the change with a message like "Bump version to x.y.z"
-3. Create a git tag with the version number: `git tag -a vx.y.z -m "Release version x.y.z"`
-4. Push the changes and tag
-
-For more details, see the release workflow: `/release-version`
+For the full process, see [Releasing](releasing.md).
 
 ## Project Structure
 
