@@ -1,4 +1,19 @@
 version: 2
+
+# No `target-branch` anywhere on purpose: `main` is already the default branch,
+# so setting it was a no-op for version updates — but it silently switched off
+# Dependabot *security* updates, which only ever target the default branch
+# ("you should not specify a target-branch" in the options reference). It also
+# added a stray `main` segment to every branch name, which fetch-metadata then
+# misreported as `directory: /main`.
+#
+# The groups below bundle patch+minor per ecosystem into one weekly PR; majors
+# stay separate for individual review. On 2026-07-26 the grouping did not take
+# effect (14 individual PRs, `dependency-group` empty in every metadata set)
+# even though the run was the scheduled one and none of them were security
+# updates. `applies-to` is now explicit; whether that was the cause will only
+# show on the next wave of bumps.
+
 updates:
   # Check for updates to Python packages
   - package-ecosystem: "pip"
@@ -9,7 +24,6 @@ updates:
       time: "09:00"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 10
-    target-branch: "main"
     labels:
       - "dependencies"
       - "python"
@@ -25,6 +39,7 @@ updates:
     # Major bumps stay separate so they can be reviewed individually.
     groups:
       pip-minor-patch:
+        applies-to: version-updates
         patterns:
           - "*"
         update-types:
@@ -40,7 +55,6 @@ updates:
       time: "09:00"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 10
-    target-branch: "main"
     labels:
       - "dependencies"
       - "github-actions"
@@ -53,6 +67,7 @@ updates:
       - "dodjango"
     groups:
       github-actions-minor-patch:
+        applies-to: version-updates
         patterns:
           - "*"
         update-types:
@@ -67,7 +82,6 @@ updates:
       time: "09:00"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 10
-    target-branch: "main"
     labels:
       - "dependencies"
       - "docker"
@@ -81,6 +95,7 @@ updates:
     versioning-strategy: "auto"
     groups:
       docker-minor-patch:
+        applies-to: version-updates
         patterns:
           - "*"
         update-types:
