@@ -4,6 +4,12 @@ name: Dependabot Auto-Merge
 # left open with a comment for manual review. No version.py bump happens here
 # anymore — that caused every PR to touch the same line and conflict, which
 # stalled the whole queue. App version bumps belong to the release process.
+#
+# Heads-up: enabling auto-merge is not the same as merging. The `main` ruleset
+# requires the three CodeQL `Analyze (...)` checks, and CodeQL default setup
+# does not produce them on Dependabot PRs ("3 configurations not found"), so a
+# queued auto-merge waits forever. Until that is resolved, Dependabot bumps
+# still have to be consolidated into a human-authored PR.
 
 on: pull_request
 
@@ -19,15 +25,20 @@ jobs:
     steps:
       - name: Fetch Dependabot metadata
         id: meta
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # --squash, not --merge: the `main` ruleset requires linear history, so
+      # enabling auto-merge with a merge commit fails outright with
+      # "Merge method merge commits are not allowed on this repository".
+      # Squash is also what release-please needs — the squash title is the
+      # conventional commit it reads.
       - name: Enable auto-merge for patch and minor updates
         if: >-
           steps.meta.outputs.update-type == 'version-update:semver-patch' ||
           steps.meta.outputs.update-type == 'version-update:semver-minor'
-        run: gh pr merge --auto --merge "$PR_URL"
+        run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
