@@ -24,33 +24,87 @@ Please be respectful and considerate of others when contributing to this project
 
 ## Development Workflow
 
-1. Create a new branch for your feature or bugfix:
+### Branches
+
+Always branch off the current `main`:
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b feature/123-device-discovery
+```
+
+Prefixes: `feature/`, `bugfix/`, `hotfix/`, `chore/`, `refactor/`. Use kebab-case
+for the descriptive part and include the issue number when there is one
+(`bugfix/456-connection-timeout`).
+
+!!! warning "No `docs/...` branch names"
+    A branch named `docs` already exists, so git rejects `docs/...` branch names
+    with a "directory file conflict" error. Use `chore/...` for documentation work.
+
+### Commit messages
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/).
+The format is not cosmetic: release-please derives the next version and the
+changelog from it (see [Releasing](releasing.md)).
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+[optional footer]
+```
+
+- **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`
+- **Scopes** in use: `tasmota`, `api`, `ui`, `device`, `auth`, `config`, `workflow`,
+  `deps` — omit the scope when a change spans several components
+- **Description**: imperative mood, lowercase, no trailing period, ideally under
+  50 characters
+- Reference issues in the body or footer (`Fixes #123`)
+
+Examples:
+
+```
+feat(device): add automatic discovery mechanism
+fix(api): handle timeout errors in device communication
+refactor(tasmota): improve error handling in update process
+chore(deps): update dependencies to latest versions
+```
+
+Commits on `main` must be signed. With `commit.gpgsign=true` configured locally
+this happens automatically.
+
+### Pull requests
+
+1. Make your changes and add tests for them
+
+2. Run the test suite:
    ```bash
-   git checkout -b feature/amazing-feature
-   # or
-   git checkout -b fix/bug-description
+   pytest --ignore=tests/e2e -m "not stale and not slow and not integration and not browser and not docker"
    ```
 
-2. Make your changes, following the coding standards
-
-3. Add tests for your changes if applicable
-
-4. Run the tests to ensure everything works:
+3. Bring the branch up to date with `main`:
    ```bash
-   pytest
+   git fetch origin
+   git merge origin/main
    ```
 
-5. Commit your changes with a descriptive commit message:
+4. Review `README.md` — it drifts unnoticed because ordinary diffs never touch
+   it. Check badges, the clone URL, ports, commands, and that no deprecated path
+   is presented as current
+
+5. Push and open the PR:
    ```bash
-   git commit -m "Add amazing feature"
+   git push -u origin "$(git branch --show-current)"
+   gh pr create
    ```
 
-6. Push to your fork:
-   ```bash
-   git push origin feature/amazing-feature
-   ```
+6. **The PR title must itself be a valid conventional commit.** PRs are
+   squash-merged, and the squash title is what release-please reads — an invalid
+   title silently means no release
 
-7. Create a Pull Request from your fork to the main repository
+Describe *what* changed and *how you tested it* in the PR body, and link the
+related issues.
 
 ## Coding Standards
 
@@ -110,12 +164,15 @@ Understanding the project architecture will help you contribute effectively:
 
 ### Command-Line Tool
 
-- `tasmota_updater.py`: Main script for the command-line interface
-- Uses modules from the `app/tasmota` directory for core functionality
+- `tasmota_updater.py`: **deprecated** — a stub that prints a notice and exits 1.
+  Its ~900 lines duplicated the update logic from `app/tasmota` and had drifted
+  away from it. Use the web UI or the REST API instead; a thin CLI wrapper over
+  `app/tasmota` is a backlog item
 
 ### Web Application
 
-- `app.py`: Main entry point for the Flask web application
+- `server.py`: Main entry point for the Flask web application
+- `wsgi.py`: WSGI entry point for production (Gunicorn)
 - `app/__init__.py`: Flask application factory
 - `app/tasmota/`: Core functionality modules
   - `api.py`: API endpoints
