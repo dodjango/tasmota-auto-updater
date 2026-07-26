@@ -107,6 +107,37 @@ Chromium, gegen die App mit Fake-Devices). Harness ist gebootstrappt
 liefert ihre Testebene mit** (Phase 1 → Auth-Integration + Auth-E2E; Phase 3 →
 Update-Flow-E2E). E2E-Job wird Required Check, sobald stabil.
 
+## Feature-Backlog (außerhalb des Audits)
+
+Wünsche, die nicht aus dem Audit stammen, aber hier mitgeführt werden, damit die
+Reihenfolge im Blick bleibt. Beide setzen den fail-closed-Zugriffsschutz aus
+Phase 1 voraus.
+
+### Version und Changelog im Footer · #98
+Footer zeigt die laufende Version (`app/version.py`, schon unter `/version`
+verfügbar) und macht den Changelog erreichbar. Zu entscheiden: Link auf das
+GitHub-Release (trivial, aber nutzlos ohne Internet — die App ist LAN-only
+gedacht) oder `CHANGELOG.md` mit ins Image und lokal rendern. Ein optionaler
+„neuere App-Version verfügbar"-Hinweis hätte dieselben Rate-Limit-Fallstricke wie
+der Firmware-Release-Lookup, inklusive der Regel aus #91: ein fehlgeschlagener
+Lookup darf nicht als „aktuell" durchgehen.
+
+### Devices-Editor im Browser + Netzwerk-Discovery · #99
+Geräteliste in der UI pflegen statt `devices.yaml` per SSH zu editieren, und
+Tasmota-Geräte im LAN automatisch finden. Der Editor ist die Voraussetzung —
+Discovery ohne Übernahmemöglichkeit bringt wenig —, umsetzbar aber in zwei
+Schritten. Die Knackpunkte stehen im Issue; die wichtigsten:
+
+- Schreibpfad auf die Konfiguration (atomar + Backup; das Volume muss schreibbar
+  sein → Deployment-Änderung), YAML-Round-Trip verliert Kommentare.
+- Geräte-Passwörter dürfen über die API nur schreibbar sein, nie zurückgelesen
+  werden — sonst hebelt der Editor die Sanitize-Linie aus.
+- Discovery bevorzugt per mDNS/zeroconf (braucht `network_mode: host`),
+  IP-Range-Scan nur als opt-in mit begrenzter Parallelität; als Job-Modell wie
+  die Batch-Updates, nicht als blockierender Request.
+- Beides erweitert die Angriffsfläche spürbar → gehört vor der Umsetzung ins
+  Threat-Model (#74).
+
 ## Empfohlene Reihenfolge
 Phase 0 → Phase 1 → (Threat-Model-Stub) → Phase 2 → Phase 3 → Phase 4 → Phase 5.
 
