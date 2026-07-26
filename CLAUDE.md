@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Tasmota Remote Updater is a Python Flask application that allows remote updating of multiple Tasmota devices via CLI, web interface, and REST API. The application follows a modular architecture with separate components for core functionality, web interface, and API endpoints.
+Tasmota Remote Updater is a Python Flask application that allows remote updating of multiple Tasmota devices via a web interface and a REST API. The application follows a modular architecture with separate components for core functionality, web interface, and API endpoints. (A CLI existed but is deprecated — see below.)
 
 ## Core Architecture
 
@@ -23,7 +23,7 @@ Tasmota Remote Updater is a Python Flask application that allows remote updating
 - **Configuration**: YAML-based device configuration with support for authentication and fake devices for testing
 
 ### Key Design Patterns
-- **Modular separation**: CLI logic extracted from web application into reusable modules
+- **Modular separation**: the update logic lives in `app/tasmota` and is shared by the web UI and the API (no duplicated copies — that duplication is exactly what killed the CLI)
 - **Security-first**: Credential sanitization in logs, no sensitive data exposure
 - **Fake device support**: Development mode with simulated devices for testing
 - **Environment-based configuration**: `.env` files for different deployment scenarios
@@ -37,16 +37,13 @@ python server.py
 
 # With fake devices for development
 ENV_FILE=.env.dev python server.py
-
-# CLI interface
-python tasmota_updater.py -f devices.yaml
-
-# CLI dry run mode
-python tasmota_updater.py --dry-run
-
-# Check firmware versions only
-python tasmota_updater.py --check-only
 ```
+
+There is **no working CLI**. `tasmota_updater.py` is a deprecation stub that
+prints a notice to stderr and exits 1 — `-f/--file`, `--dry-run`,
+`--check-only`, `--update-all` and `--example` are all gone. For scripting, use
+the REST API (`POST /api/update`, `POST /api/update/all`, `GET /api/jobs/<id>`).
+Re-introducing a thin CLI over `app/tasmota` is a backlog item.
 
 ### Environment Setup
 ```bash
@@ -72,11 +69,11 @@ mkdocs build   # Static build
 # Development with fake devices
 ENV_FILE=.env.dev python server.py
 
-# Test CLI with dry run
-python tasmota_updater.py --dry-run
+# Green test core (see "CI, Testing & Gotchas" below)
+pytest --ignore=tests/e2e -m "not stale and not slow and not integration and not browser and not docker"
 
-# Example configuration generation
-python tasmota_updater.py --example
+# Playwright e2e suite (needs a GITHUB_TOKEN to avoid GitHub API rate limits)
+pytest tests/e2e -m e2e -o addopts=""
 ```
 
 ## Configuration Files
