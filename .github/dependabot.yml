@@ -8,11 +8,17 @@ version: 2
 # misreported as `directory: /main`.
 #
 # The groups below bundle patch+minor per ecosystem into one weekly PR; majors
-# stay separate for individual review. On 2026-07-26 the grouping did not take
-# effect (14 individual PRs, `dependency-group` empty in every metadata set)
-# even though the run was the scheduled one and none of them were security
-# updates. `applies-to` is now explicit; whether that was the cause will only
-# show on the next wave of bumps.
+# stay separate for individual review.
+#
+# They never took effect, and the reason was not the group syntax: this file
+# had been schema-invalid since the very commit that introduced the groups
+# (2026-07-22), because `versioning-strategy` is not allowed for the docker
+# ecosystem. Dependabot reported that on its `.github/dependabot.yml` check —
+# a check that only re-runs when this file changes, so nobody saw it for days
+# while the scheduled runs quietly fell back to one PR per dependency.
+#
+# Lesson: after editing this file, look at the `.github/dependabot.yml` check
+# on the commit. A silently ignored config looks exactly like a working one.
 
 updates:
   # Check for updates to Python packages
@@ -92,7 +98,6 @@ updates:
       - "dodjango"
     reviewers:
       - "dodjango"
-    versioning-strategy: "auto"
     groups:
       docker-minor-patch:
         applies-to: version-updates
