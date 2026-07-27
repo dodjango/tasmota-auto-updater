@@ -1,0 +1,65 @@
+name: CodeQL
+
+# Advanced setup, deliberately replacing CodeQL *default* setup.
+#
+# Default setup does not run on Dependabot PRs (github/codeql-action#2858): the
+# aggregate check reports "3 configurations not found" with a neutral
+# conclusion and the three `Analyze (...)` jobs never appear. Since those three
+# are required contexts on `main`, every Dependabot PR was missing half its
+# required checks — unmergeable, with auto-merge queued forever. As a normal
+# workflow the analysis runs on Dependabot PRs like any other job.
+#
+# The job name is kept byte-identical to the default-setup check names
+# (`Analyze (actions)`, `Analyze (javascript-typescript)`, `Analyze (python)`)
+# so the ruleset contexts keep matching. Do not rename it without updating the
+# ruleset in the same breath.
+#
+# Mirrors what default setup was configured with: same three languages, default
+# query suite, weekly schedule.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, same cadence the default setup used.
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      # Required to upload the SARIF results, including on Dependabot PRs,
+      # where the token is read-only unless a job asks for more.
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # `javascript-typescript` covers both JS and TS — that is why default
+        # setup produced three checks, not five, for its five listed languages.
+        language: [actions, javascript-typescript, python]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
