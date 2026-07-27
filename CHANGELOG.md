@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/dodjango/tasmota-auto-updater/compare/v0.5.3...v0.5.4) (2026-07-27)
+
+
+### Bug Fixes
+
+* **ci:** make dependabot.yml schema-valid again ([#121](https://github.com/dodjango/tasmota-auto-updater/issues/121)) ([197a7f8](https://github.com/dodjango/tasmota-auto-updater/commit/197a7f802fce1368d39f858ba5422f4e68760044))
+
 ## [0.5.3](https://github.com/dodjango/tasmota-auto-updater/compare/v0.5.2...v0.5.3) (2026-07-26)
 
 
