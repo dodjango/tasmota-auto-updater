@@ -241,10 +241,11 @@ def cmd_list(devices: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for device in devices:
         info = updater.get_device_firmware_version(dict(device))
+        version = info.get("version") if isinstance(info, dict) else None
         result: dict[str, Any] = {
             "ip": device.get("ip"),
-            "success": info is not None,
-            "current_version": (info or {}).get("version", UNKNOWN_VERSION),
+            "success": bool(version),
+            "current_version": version or UNKNOWN_VERSION,
         }
         if device.get("dns_name"):
             result["dns_name"] = device["dns_name"]

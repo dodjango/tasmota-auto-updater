@@ -297,3 +297,14 @@ def test_cmd_list_marks_unreachable_device(monkeypatch):
     results = cli.cmd_list([{"ip": "192.168.8.193"}])
     assert results[0]["success"] is False
     assert results[0]["current_version"] == "Unknown"
+
+
+def test_cmd_list_treats_a_versionless_answer_as_a_failure(monkeypatch):
+    monkeypatch.setattr(
+        cli.updater,
+        "get_device_firmware_version",
+        lambda device: {"core_version": "2.7.4.9"},  # no "version" key
+    )
+    results = cli.cmd_list([{"ip": "192.168.8.194"}])
+    assert results[0]["success"] is False
+    assert results[0]["current_version"] == "Unknown"
