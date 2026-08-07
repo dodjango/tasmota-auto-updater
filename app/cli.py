@@ -292,10 +292,15 @@ def cmd_update(
 
     by_ip = {device.get("ip"): device for device in devices}
     subset = [by_ip[ip] for ip in selected_ips if ip in by_ip]
-    updated = {
-        result.get("ip"): result
-        for result in run_batch(subset, check_only=False, timeout=timeout)
-    }
+    # If every selected IP is unmapped, the subset is empty — do not hand that
+    # to the runner and get back a runner-shaped error instead of ours. The
+    # message shape must stay the same however the devices went missing.
+    updated: dict[Any, dict[str, Any]] = {}
+    if subset:
+        updated = {
+            result.get("ip"): result
+            for result in run_batch(subset, check_only=False, timeout=timeout)
+        }
     # Every selected device must come back with a pass-two result. Silently
     # falling back to its pass-one entry would leave it carrying a stale
     # needs_update flag while landing in none of the tally's buckets — the

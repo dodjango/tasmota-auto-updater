@@ -1,5 +1,6 @@
 """Unit tests for the thin CLI wrapper (app/cli.py)."""
 import json
+import re
 
 import pytest
 
@@ -447,5 +448,44 @@ def test_cmd_update_raises_when_the_flash_pass_drops_a_selected_device(monkeypat
 
     monkeypatch.setattr(cli, "run_batch", fake_run_batch)
 
-    with pytest.raises(cli.CliError, match="2"):
+    with pytest.raises(cli.CliError) as excinfo:
         cli.cmd_update([{"ip": "1"}, {"ip": "2"}], force=False, timeout=None)
+
+    message = str(excinfo.value)
+    assert re.search(r"no result for: 2$", message)
+    assert "1" not in message.split("no result for:")[1]
+
+
+def test_cmd_update_raises_without_calling_the_runner_when_the_whole_subset_is_unmapped(
+    monkeypatch,
+):
+    calls = []
+
+    def fake_run_batch(devices, *, check_only, timeout):
+        calls.append(check_only)
+        return [_result(ip="1", needs_update=True)]
+
+    monkeypatch.setattr(cli, "run_batch", fake_run_batch)
+
+    # "9" is not a configured device, so the selected IP from pass one can
+    # never be mapped back to a device to flash — the subset is empty.
+    with pytest.raises(cli.CliError, match=r"no result for: 1$"):
+        cli.cmd_update([{"ip": "9"}], force=False, timeout=None)
+
+    assert calls == [True], "the flash pass must not run against an empty subset"
+
+
+def test_cmd_update_force_does_not_flash_a_device_with_unknown_comparison(monkeypatch):
+    passes = []
+
+    def fake_run_batch(devices, *, check_only, timeout):
+        passes.append({"ips": [d["ip"] for d in devices], "check_only": check_only})
+        if check_only:
+            return [_result(ip="1", latest_version="Unknown")]
+        return [_result(ip="1", update_completed=True)]
+
+    monkeypatch.setattr(cli, "run_batch", fake_run_batch)
+    results = cli.cmd_update([{"ip": "1"}], force=True, timeout=None)
+
+    assert len(passes) == 1, "a device with an unknown comparison must never be flashed"
+    assert results == [_result(ip="1", latest_version="Unknown")]
