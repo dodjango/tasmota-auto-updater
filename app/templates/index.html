@@ -194,23 +194,23 @@
         </section>
 
         <section class="section" x-data="devicesEditor()" x-init="init()">
-          <h2 class="title is-4">Geräte verwalten</h2>
+          <h2 class="title is-4">Manage Devices</h2>
 
           <div class="notification is-warning" x-show="!writable" x-cloak>
-            Die Konfigurationsdatei <span x-text="devicesFile"></span> ist nicht
-            schreibbar. Wird sie als einzelne Datei ins Image gemountet, muss
-            stattdessen ihr Verzeichnis gemountet werden — siehe
+            The configuration file <span x-text="devicesFile"></span> is not
+            writable. If it is mounted into the image as a single file, its
+            directory must be mounted instead — see
             <code>compose.example.yml</code>.
           </div>
 
           <div class="notification is-danger" x-show="error" x-cloak x-text="error"></div>
-          <div class="notification is-success" x-show="saved" x-cloak>Gespeichert.</div>
+          <div class="notification is-success" x-show="saved" x-cloak>Saved.</div>
 
           <table class="table is-fullwidth">
             <thead>
               <tr>
-                <th>IP</th><th>Name</th><th>Benutzer</th><th>Passwort</th>
-                <th>Timeout</th><th></th>
+                <th scope="col">IP</th><th scope="col">Name</th><th scope="col">Username</th><th scope="col">Password</th>
+                <th scope="col">Timeout</th><th scope="col"></th>
               </tr>
             </thead>
             <tbody>
@@ -218,33 +218,38 @@
                 <tr>
                   <td><input class="input" type="text" x-model="device.ip"
                              :disabled="!writable" placeholder="192.168.8.191"
-                             title="IP-Adresse des Geräts eintragen"></td>
+                             aria-label="Device IP address"
+                             title="Enter the device's IP address — changing it makes this a new device, so its stored password is not carried over"></td>
                   <td><input class="input" type="text" x-model="device.dns_name"
                              :disabled="!writable"
-                             title="Anzeigenamen für das Gerät eintragen"></td>
+                             aria-label="Device display name"
+                             title="Enter a display name for the device"></td>
                   <td><input class="input" type="text" x-model="device.username"
                              :disabled="!writable"
-                             title="Benutzernamen für die Geräte-Anmeldung eintragen"></td>
+                             aria-label="Device username"
+                             title="Enter the username for the device login"></td>
                   <td>
                     <input class="input" type="password" x-model="device.password"
                            :disabled="!writable"
-                           :placeholder="device.has_password ? '•••••••• (gesetzt)' : 'kein Passwort'"
-                           title="Neues Passwort eintragen — leer lassen behält das gespeicherte">
+                           :placeholder="device.has_password ? '•••••••• (set)' : 'no password'"
+                           aria-label="Device password"
+                           title="Enter a new password — leave blank to keep the stored one">
                     <button class="button is-small is-text" type="button"
                             x-show="device.has_password" :disabled="!writable"
                             @click="clearPassword(device)"
-                            title="Gespeichertes Passwort entfernen — das Gerät wird danach ohne Anmeldung angesprochen">
-                      Passwort entfernen
+                            title="Remove the stored password — the device will then be contacted without credentials">
+                      Remove password
                     </button>
                   </td>
                   <td><input class="input" type="number" x-model="device.timeout"
                              :disabled="!writable" min="60" max="600" placeholder="240"
-                             title="Timeout in Sekunden für dieses Gerät setzen (60–600)"></td>
+                             aria-label="Device timeout in seconds"
+                             title="Set the timeout in seconds for this device (60–600)"></td>
                   <td>
                     <button class="button is-danger is-small" type="button"
                             :disabled="!writable" @click="removeDevice(index)"
-                            title="Gerät aus der Konfiguration entfernen — wird erst beim Speichern wirksam">
-                      Entfernen
+                            title="Remove the device from the configuration — applied when you save">
+                      Remove
                     </button>
                   </td>
                 </tr>
@@ -252,14 +257,19 @@
             </tbody>
           </table>
 
+          <p class="help">
+            Changing a device's IP address makes it a new device — its stored
+            password is not carried over and must be entered again.
+          </p>
+
           <div class="buttons">
             <button class="button" type="button" :disabled="!writable" @click="addDevice()"
-                    title="Neues Gerät zur Liste hinzufügen">Gerät hinzufügen</button>
+                    title="Add a new device to the list">Add Device</button>
             <button class="button is-primary" type="button"
                     :disabled="!writable || saving" :class="{'is-loading': saving}"
                     @click="save()"
-                    title="Geänderte Geräteliste in die Konfigurationsdatei schreiben">
-              Speichern
+                    title="Write the changed device list to the configuration file">
+              Save
             </button>
           </div>
         </section>

@@ -34,7 +34,7 @@ function devicesEditor() {
                 this.writable = payload.writable;
                 this.devicesFile = payload.devices_file;
             } catch (err) {
-                this.error = `Konfiguration konnte nicht geladen werden: ${err.message}`;
+                this.error = `Could not load the configuration: ${err.message}`;
             } finally {
                 this.loading = false;
             }
@@ -49,12 +49,14 @@ function devicesEditor() {
 
         removeDevice(index) {
             const device = this.devices[index];
-            const label = device.dns_name || device.ip || 'dieses Gerät';
-            if (!confirm(`${label} aus der Konfiguration entfernen?`)) return;
+            const label = device.dns_name || device.ip || 'this device';
+            if (!confirm(`Remove ${label} from the configuration?`)) return;
             this.devices.splice(index, 1);
         },
 
         clearPassword(device) {
+            const label = device.dns_name || device.ip || 'this device';
+            if (!confirm(`Remove the stored password for ${label}? It will be contacted without credentials until a new password is entered and saved.`)) return;
             device.remove_password = true;
             device.password = '';
             device.has_password = false;
@@ -63,8 +65,10 @@ function devicesEditor() {
         _payload() {
             return this.devices.map(device => {
                 const entry = { ip: (device.ip || '').trim() };
-                if (device.username) entry.username = device.username;
-                if (device.dns_name) entry.dns_name = device.dns_name;
+                const username = (device.username || '').trim();
+                const dnsName = (device.dns_name || '').trim();
+                if (username) entry.username = username;
+                if (dnsName) entry.dns_name = dnsName;
                 if (device.timeout) entry.timeout = Number(device.timeout);
                 if (device.password) entry.password = device.password;
                 if (device.remove_password) entry.remove_password = true;
@@ -84,7 +88,16 @@ function devicesEditor() {
                 });
                 const payload = await response.json();
                 if (!response.ok) {
-                    throw new Error(payload.details || `HTTP ${response.status}`);
+                    const message = payload.details || `HTTP ${response.status}`;
+                    if (response.status === 409) {
+                        // Not writable (or unreadable) — re-derive `writable` from the
+                        // server instead of letting the user retry against a file that
+                        // will keep rejecting. load() clears `error`, so re-apply it.
+                        await this.load();
+                        this.error = `Save failed: ${message}`;
+                        return;
+                    }
+                    throw new Error(message);
                 }
                 this.devices = payload.devices.map(device => ({
                     ...device, password: '', remove_password: false,
@@ -92,7 +105,7 @@ function devicesEditor() {
                 this.saved = true;
                 setTimeout(() => { this.saved = false; }, 4000);
             } catch (err) {
-                this.error = `Speichern fehlgeschlagen: ${err.message}`;
+                this.error = `Save failed: ${err.message}`;
             } finally {
                 this.saving = false;
             }
