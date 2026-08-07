@@ -192,7 +192,78 @@
                 </div>
             </div>
         </section>
-        
+
+        <section class="section" x-data="devicesEditor()" x-init="init()">
+          <h2 class="title is-4">Geräte verwalten</h2>
+
+          <div class="notification is-warning" x-show="!writable" x-cloak>
+            Die Konfigurationsdatei <span x-text="devicesFile"></span> ist nicht
+            schreibbar. Wird sie als einzelne Datei ins Image gemountet, muss
+            stattdessen ihr Verzeichnis gemountet werden — siehe
+            <code>compose.example.yml</code>.
+          </div>
+
+          <div class="notification is-danger" x-show="error" x-cloak x-text="error"></div>
+          <div class="notification is-success" x-show="saved" x-cloak>Gespeichert.</div>
+
+          <table class="table is-fullwidth">
+            <thead>
+              <tr>
+                <th>IP</th><th>Name</th><th>Benutzer</th><th>Passwort</th>
+                <th>Timeout</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(device, index) in devices" :key="index">
+                <tr>
+                  <td><input class="input" type="text" x-model="device.ip"
+                             :disabled="!writable" placeholder="192.168.8.191"
+                             title="IP-Adresse des Geräts eintragen"></td>
+                  <td><input class="input" type="text" x-model="device.dns_name"
+                             :disabled="!writable"
+                             title="Anzeigenamen für das Gerät eintragen"></td>
+                  <td><input class="input" type="text" x-model="device.username"
+                             :disabled="!writable"
+                             title="Benutzernamen für die Geräte-Anmeldung eintragen"></td>
+                  <td>
+                    <input class="input" type="password" x-model="device.password"
+                           :disabled="!writable"
+                           :placeholder="device.has_password ? '•••••••• (gesetzt)' : 'kein Passwort'"
+                           title="Neues Passwort eintragen — leer lassen behält das gespeicherte">
+                    <button class="button is-small is-text" type="button"
+                            x-show="device.has_password" :disabled="!writable"
+                            @click="clearPassword(device)"
+                            title="Gespeichertes Passwort entfernen — das Gerät wird danach ohne Anmeldung angesprochen">
+                      Passwort entfernen
+                    </button>
+                  </td>
+                  <td><input class="input" type="number" x-model="device.timeout"
+                             :disabled="!writable" min="60" max="600" placeholder="240"
+                             title="Timeout in Sekunden für dieses Gerät setzen (60–600)"></td>
+                  <td>
+                    <button class="button is-danger is-small" type="button"
+                            :disabled="!writable" @click="removeDevice(index)"
+                            title="Gerät aus der Konfiguration entfernen — wird erst beim Speichern wirksam">
+                      Entfernen
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+
+          <div class="buttons">
+            <button class="button" type="button" :disabled="!writable" @click="addDevice()"
+                    title="Neues Gerät zur Liste hinzufügen">Gerät hinzufügen</button>
+            <button class="button is-primary" type="button"
+                    :disabled="!writable || saving" :class="{'is-loading': saving}"
+                    @click="save()"
+                    title="Geänderte Geräteliste in die Konfigurationsdatei schreiben">
+              Speichern
+            </button>
+          </div>
+        </section>
+
         <!-- Update confirmation modal -->
         <div class="modal" :class="{'is-active': showUpdateModal}">
             <div class="modal-background" @click="showUpdateModal = false"></div>
@@ -235,5 +306,6 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/devices-editor.js') }}"></script>
 </body>
 </html>
