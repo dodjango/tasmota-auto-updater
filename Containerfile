@@ -41,7 +41,8 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HOST=0.0.0.0 \
-    PORT=5001
+    PORT=5001 \
+    DEVICES_FILE=/app/config/devices.yaml
 
 # Copy only necessary application files
 COPY server.py wsgi.py gunicorn.conf.py /app/

@@ -22,4 +22,4 @@ def test_check_all_async_flow(page: Page, app_server: str):
     expect(page.get_by_text("Last:").first).to_be_visible(timeout=30000)
 
     # No error notification surfaced during the async flow.
-    expect(page.locator(".notification.is-danger")).not_to_be_visible()
+    expect(page.get_by_test_id("device-error")).not_to_be_visible()

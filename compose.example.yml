@@ -15,12 +15,14 @@ services:
     ports:
       - "5001:5001"
     volumes:
-      - ./devices.yaml:/app/devices.yaml
+      # The directory is mounted, not the file: replacing a bind-mounted file
+      # fails with EBUSY, so the editor could not write it.
+      - ./config:/app/config
       - ./logs:/app/logs
       - ./app/tasmota/cache:/app/app/tasmota/cache
     environment:
       # Use environment variable with fallback
-      - DEVICES_FILE=${DEVICES_FILE:-devices.yaml}
+      - DEVICES_FILE=${DEVICES_FILE:-/app/config/devices.yaml}
       # SECRET_KEY: leave unset and the app generates an ephemeral random key at
       # startup. Set a strong, persistent value only if you need sessions to
       # survive restarts (the bundled UI currently uses no server-side sessions).

@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div x-data="tasmotaApp()" x-init="init()">
+    <div x-data="tasmotaApp()" x-init="init()" @devices-changed.window="refreshDevices()">
         <nav class="navbar is-primary" role="navigation" aria-label="main navigation" x-data="{ navOpen: false }">
             <div class="navbar-brand">
                 <a class="navbar-item" href="/" title="Return to home page">
@@ -77,7 +77,7 @@
                 </div>
                 
                 <!-- Error notification -->
-                <div class="notification is-danger" x-show="error" x-cloak>
+                <div class="notification is-danger" x-show="error" x-cloak data-testid="device-error">
                     <button class="delete" @click="error = null"></button>
                     <span x-text="error"></span>
                 </div>
@@ -192,7 +192,91 @@
                 </div>
             </div>
         </section>
-        
+
+        <section class="section" x-data="devicesEditor()" x-init="init()">
+          <h2 class="title is-4">Manage Devices</h2>
+
+          <div class="notification is-warning" x-show="!writable" x-cloak>
+            The configuration file <span x-text="devicesFile"></span> is not
+            writable. If it is mounted into the image as a single file, its
+            directory must be mounted instead — see
+            <code>compose.example.yml</code>.
+          </div>
+
+          <div class="notification is-danger" x-show="error" x-cloak x-text="error" data-testid="editor-error"></div>
+          <div class="notification is-success" x-show="saved" x-cloak>Saved.</div>
+
+          <table class="table is-fullwidth">
+            <thead>
+              <tr>
+                <th scope="col">IP</th><th scope="col">Name</th><th scope="col">Username</th><th scope="col">Password</th>
+                <th scope="col">Timeout</th><th scope="col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr x-show="loading" x-cloak>
+                <td colspan="6" class="has-text-centered">Loading…</td>
+              </tr>
+              <template x-for="(device, index) in devices" :key="index">
+                <tr>
+                  <td><input class="input" type="text" x-model="device.ip"
+                             :disabled="!writable" placeholder="192.168.8.191"
+                             aria-label="Device IP address"
+                             title="Enter the device's IP address — changing it makes this a new device, so its stored password is not carried over"></td>
+                  <td><input class="input" type="text" x-model="device.dns_name"
+                             :disabled="!writable"
+                             aria-label="Device display name"
+                             title="Enter a display name for the device"></td>
+                  <td><input class="input" type="text" x-model="device.username"
+                             :disabled="!writable"
+                             aria-label="Device username"
+                             title="Enter the username for the device login"></td>
+                  <td>
+                    <input class="input" type="password" x-model="device.password"
+                           :disabled="!writable"
+                           :placeholder="device.has_password ? '•••••••• (set)' : 'no password'"
+                           aria-label="Device password"
+                           title="Enter a new password — leave blank to keep the stored one">
+                    <button class="button is-small is-text" type="button"
+                            x-show="device.has_password" :disabled="!writable"
+                            @click="clearPassword(device)"
+                            title="Remove the stored password — the device will then be contacted without credentials">
+                      Remove password
+                    </button>
+                  </td>
+                  <td><input class="input" type="number" x-model="device.timeout"
+                             :disabled="!writable" min="60" max="600" placeholder="240"
+                             aria-label="Device timeout in seconds"
+                             title="Set the timeout in seconds for this device (60–600)"></td>
+                  <td>
+                    <button class="button is-danger is-small" type="button"
+                            :disabled="!writable" @click="removeDevice(index)"
+                            title="Remove the device from the configuration — applied when you save">
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+
+          <p class="help">
+            Changing a device's IP address makes it a new device — its stored
+            password is not carried over and must be entered again.
+          </p>
+
+          <div class="buttons">
+            <button class="button" type="button" :disabled="!writable || !loaded" @click="addDevice()"
+                    title="Add a new device to the list">Add Device</button>
+            <button class="button is-primary" type="button"
+                    :disabled="!writable || !loaded || saving" :class="{'is-loading': saving}"
+                    @click="save()"
+                    title="Write the changed device list to the configuration file">
+              Save
+            </button>
+          </div>
+        </section>
+
         <!-- Update confirmation modal -->
         <div class="modal" :class="{'is-active': showUpdateModal}">
             <div class="modal-background" @click="showUpdateModal = false"></div>
@@ -235,5 +319,6 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/devices-editor.js') }}"></script>
 </body>
 </html>

@@ -1,9 +1,11 @@
 """API endpoints for the Tasmota updater web application"""
 
 import os
+from pathlib import Path
+from typing import Any
 from flask import request, jsonify, current_app
 from flask_restful import Api, Resource
-from marshmallow import Schema, fields, validate
+from marshmallow import Schema, ValidationError, fields, validate
 from flasgger import swag_from
 from app.tasmota.updater import (
     get_device_firmware_version,
@@ -12,6 +14,7 @@ from app.tasmota.updater import (
     is_valid_ip_address,
 )
 from app.tasmota.utils import load_devices_from_file, resolve_dns_name, is_fake_device
+from app.tasmota import device_config
 from app.tasmota import jobs
 
 
@@ -36,6 +39,132 @@ class DeviceUpdateSchema(Schema):
 
     class Meta:
         fields = ("ip", "username", "password", "check_only", "timeout")
+
+
+def _validate_device_ip(value: str) -> None:
+    """Reject anything is_valid_ip_address() rejects.
+
+    That function deliberately blocks loopback, link-local and the cloud
+    metadata address — the same block that keeps the update endpoints from
+    being turned into an SSRF primitive. The editor must not be a way around it.
+    """
+    if not is_valid_ip_address(value):
+        raise ValidationError(f"Not a usable device address: {value!r}")
+
+
+class DeviceConfigSchema(Schema):
+    """One device as the editor may submit it.
+
+    ``unknown = "raise"`` is a security property, not a convenience: it is
+    what keeps ``fake`` and ``firmware_info`` unsettable through the editor.
+    """
+
+    ip = fields.String(required=True, validate=_validate_device_ip)
+    username = fields.String()
+    password = fields.String()
+    dns_name = fields.String()
+    timeout = fields.Integer(validate=validate.Range(min=60, max=600))
+    remove_password = fields.Boolean()
+
+    class Meta:
+        unknown = "raise"
+
+
+def validate_device_list(devices: list[dict[str, Any]]) -> list[str]:
+    """List-level checks that a per-device schema cannot express."""
+    errors: list[str] = []
+    seen: set[Any] = set()
+    for device in devices:
+        ip = device.get("ip")
+        if ip in seen:
+            errors.append(f"Duplicate device address: {ip}")
+        seen.add(ip)
+    return errors
+
+
+class DeviceConfigResource(Resource):
+    """The device list as configuration — raw fields, editable.
+
+    Separate from DeviceListResource on purpose: that one is the operational
+    view and enriches its answer (masked password, resolved dns_name falling
+    back to the IP), which must never be written back to the file.
+    """
+
+    def get(self):
+        """
+        Get the raw device configuration
+        ---
+        tags:
+          - configuration
+        responses:
+          200:
+            description: Configured devices, passwords replaced by has_password
+        """
+        devices_file = Path(current_app.config.get('DEVICES_FILE', 'devices.yaml'))
+        devices = load_devices_from_file(str(devices_file))
+
+        exposed = []
+        for device in devices:
+            entry: dict[str, Any] = {
+                field: device[field]
+                for field in ("ip", "username", "dns_name", "timeout")
+                if field in device
+            }
+            entry["has_password"] = bool(device.get("password"))
+            exposed.append(entry)
+
+        return jsonify({
+            "devices": exposed,
+            "writable": device_config.is_writable(devices_file),
+            "devices_file": str(devices_file),
+        })
+
+    def put(self):
+        """
+        Replace the device configuration
+        ---
+        tags:
+          - configuration
+        responses:
+          200:
+            description: The stored configuration after the write
+          400:
+            description: Validation failed
+          409:
+            description: The configuration file is not writable
+          415:
+            description: Body was not JSON
+        """
+        if not request.is_json:
+            return {'error': 'Unsupported Media Type',
+                    'details': 'Content-Type must be application/json'}, 415
+
+        body = request.get_json(silent=True) or {}
+        submitted = body.get('devices')
+        if not isinstance(submitted, list):
+            return {'error': 'Bad Request', 'details': "'devices' must be a list"}, 400
+
+        schema = DeviceConfigSchema()
+        cleaned = []
+        for index, entry in enumerate(submitted):
+            try:
+                cleaned.append(schema.load(entry))
+            except ValidationError as exc:
+                return {'error': 'Bad Request',
+                        'details': f"Device #{index + 1}: {exc.messages}"}, 400
+
+        list_errors = validate_device_list(cleaned)
+        if list_errors:
+            return {'error': 'Bad Request', 'details': '; '.join(list_errors)}, 400
+
+        devices_file = Path(current_app.config.get('DEVICES_FILE', 'devices.yaml'))
+        try:
+            merged = device_config.replace_devices(devices_file, cleaned)
+        except (device_config.ConfigReadError, device_config.ConfigWriteError) as exc:
+            return {'error': 'Conflict', 'details': str(exc)}, 409
+
+        current_app.logger.info("Device configuration updated: %d device(s)", len(merged))
+        return self.get()
 
 
 # API Resources
@@ -505,6 +634,7 @@ def init_api(app):
     api = Api(app)
 
     # Register resources
+    api.add_resource(DeviceConfigResource, '/api/config/devices')
     api.add_resource(DeviceListResource, '/api/devices')
     api.add_resource(DeviceStatusResource, '/api/devices/<string:device_ip>')
     api.add_resource(LatestReleaseResource, '/api/releases/latest')
