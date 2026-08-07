@@ -1,177 +1,179 @@
 # Command-Line Usage Guide
 
-> **⚠️ Deprecated.** The command-line interface is deprecated and no longer
-> maintained. It duplicated (and had drifted out of sync with) the core update
-> logic. Use the **Web Interface** (`python server.py` or the container image)
-> or the **REST API** (`POST /api/update`, `POST /api/update/all`) instead —
-> both share the maintained core in `app/tasmota`. Running `tasmota_updater.py`
-> now only prints a deprecation notice and exits. The content below is retained
-> for historical reference.
+There is a thin CLI over the maintained core in `app/tasmota`: `python -m
+app.cli`. It contains **no update logic of its own** — it resolves the device
+list and calls into the same code the web UI and the REST API use.
 
-The Tasmota Remote Updater includes a powerful command-line interface that allows you to update multiple devices at once, check firmware versions, and more.
+The old `tasmota_updater.py` script is gone. Its options
+(`--update-all`, `--check-only`, `--dry-run`, `--example` and the interactive
+configuration wizard) do **not** carry over — running `tasmota_updater.py` now
+only prints a pointer to this CLI and exits 1.
+
+The documented invocation is always `python -m app.cli`, not a standalone
+command, because the project is not installed as a package anywhere (not
+locally, not in the container image). A `[project.scripts]` entry
+(`tasmota-updater`) exists in `pyproject.toml`, but it only works after `pip
+install .`, which nothing in this repo does — don't rely on it.
 
 ## Basic Usage
 
 ```bash
-# If using a virtual environment, make sure it's activated first
-source venv/bin/activate  # For standard venv (bash/zsh)
-# OR
-source .venv/bin/activate  # For uv (bash/zsh)
-
-# Then run the script
-python tasmota_updater.py
+python -m app.cli check
+python -m app.cli update
+python -m app.cli list
 ```
 
-## Setting Up Device List
-
-The script uses a YAML file named `devices.yaml` to store your Tasmota device information.
-
-### Interactive Configuration Wizard
-
-When you run the script for the first time, an interactive configuration wizard will guide you through setting up your devices:
-
-1. The wizard will prompt you to enter the IP address for each device
-2. For each device, you can optionally provide authentication credentials (username and password)
-3. When you're finished adding devices, simply press Enter without typing an IP address
-
-**Example of the interactive wizard:**
-
-```
-=== Tasmota Device Configuration Wizard ===
-
-This wizard will help you create a configuration file for your Tasmota devices.
-You'll be prompted to enter information for each device.
-When you're finished adding devices, just press Enter without typing an IP address.
-
---- Device #1 ---
-Enter device IP address (or press Enter to finish): 192.168.1.100
-
-Authentication (leave empty if not required):
-Username (default: empty): admin
-Password (default: empty): secret
-Device #1 added successfully!
-
---- Device #2 ---
-Enter device IP address (or press Enter to finish): 192.168.1.101
-
-Authentication (leave empty if not required):
-Username (default: empty): 
-Password (default: empty): 
-Device #2 added successfully!
-
---- Device #3 ---
-Enter device IP address (or press Enter to finish): 
-
-Configuration saved to devices.yaml
-Found 2 device(s) in the configuration
-```
-
-### Manual Configuration
-
-If you prefer to create or edit the file manually, use this format:
-
-```yaml
-devices:
-  - ip: 192.168.1.100
-    username: admin  # optional
-    password: secret # optional
-  - ip: 192.168.1.101
-  - ip: 192.168.1.102
-    username: admin
-    password: mypass
-```
-
-> **Note:** The `devices.yaml` file is excluded from version control in the `.gitignore` file to prevent accidentally committing your device credentials.
-
-## Command-line Arguments
-
-The script supports several command-line arguments:
-
-```
-usage: tasmota_updater.py [-h] [-f FILE] [--example] [--non-interactive] [--dry-run] [--check-only] [--update-all] [--log-file LOG_FILE] [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
-
-Update Tasmota devices over your network
-
-options:
-  -h, --help            show this help message and exit
-  -f FILE, --file FILE  Path to devices configuration file (default: devices.yaml)
-  --example             Create an example configuration file and exit
-  --non-interactive     Don't use interactive prompts, create example file if needed
-  --dry-run             Simulate the update process without making any changes
-  --check-only          Only check firmware versions without updating any devices
-  --update-all          Update all devices even if they are already running the latest version
-  --log-file LOG_FILE   Path to log file (default: logs/tasmota_updater.log)
-  --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
-                        Logging level (default: INFO)
-```
-
-## Common Use Cases
-
-### Creating an Example Configuration
+In a container, without a new build layer:
 
 ```bash
-python tasmota_updater.py --example
+podman run --rm -v ./devices.yaml:/app/devices.yaml:ro \
+  --entrypoint python dodjango/tasmota-updater -m app.cli check
 ```
 
-### Using a Custom Configuration File
+## The Three Verbs
+
+| Verb | What it does | Talks to GitHub? |
+|---|---|---|
+| `check` | Compares every configured device against the latest Tasmota release. Reports, never flashes. | Yes |
+| `update` | Classifies every device first, then flashes the outdated ones (or, with `--force`, all reachable ones). | Yes |
+| `list` | Lists configured devices and the firmware they report. No release lookup at all. | No |
+
+`list` is immune to GitHub rate limits and can never report a device as
+outdated — it doesn't compare anything. Use it as a plain inventory source.
+
+## Options
+
+Shared options go **after** the verb:
+
+```
+python -m app.cli {check|update|list} [-f PATH] [--json] [--log-level LEVEL]
+python -m app.cli update [--timeout SECONDS] [--force]
+```
+
+`python -m app.cli list --json` works. `python -m app.cli --json list` does
+not — the shared options belong to the subcommand parser, not the top-level
+one.
+
+| Option | Meaning |
+|---|---|
+| `-f`, `--file PATH` | Path to the devices YAML file. Resolved like the server: an explicit `-f` wins, otherwise `DEVICES_FILE` from the environment/`.env`, otherwise `devices.yaml`. |
+| `--json` | Emit a JSON object on stdout instead of a table. |
+| `--log-level LEVEL` | `DEBUG`, `INFO`, `WARNING` (default) or `ERROR`. Logs go to stderr, never stdout, so `--json` output stays parseable regardless of the level. |
+| `--timeout SECONDS` | `update` only. Overrides the per-device total timeout. |
+| `--force` | `update` only. Flashes every configured device, including up-to-date ones — but never a device that could not be reached or classified. |
+
+Without `--force`, `update` only touches devices it classified as outdated —
+the safe default for an unattended run.
+
+## Output
+
+stdout carries only the result; stderr carries logs and errors.
+
+### Human-readable (default)
+
+One line per device plus a closing tally:
+
+```
+192.168.100.101  fake-tasmota-light1.local  12.0.2
+192.168.100.102  fake-tasmota-switch1.local  11.1.0
+192.168.100.103  fake-tasmota-plug1.local  12.0.2(tasmota-minimal)
+192.168.100.104  fake-tasmota-slow-device.local  11.0.0
+4 Geräte, 0 Fehler
+```
+
+(That example is `list` against the fake devices in `devices-dev.yaml` — the
+German tally wording is user-visible output, not a translation gap.) For
+`check`, a device carries one of four labels: `aktuell`, `Update verfügbar`,
+`Vergleich unbekannt`, or `nicht erreichbar`.
+
+### JSON (`--json`)
+
+The core's own result dicts, unchanged, plus a computed summary and the exit
+code:
+
+```json
+{
+  "command": "check",
+  "devices_file": "devices.yaml",
+  "results": [
+    {
+      "ip": "192.168.8.191",
+      "success": true,
+      "current_version": "14.6.0",
+      "latest_version": "15.0.1",
+      "needs_update": true,
+      "message": "..."
+    }
+  ],
+  "summary": {
+    "total": 4,
+    "up_to_date": 1,
+    "needs_update": 1,
+    "comparison_unknown": 1,
+    "failed": 1
+  },
+  "exit_code": 2
+}
+```
+
+`summary` is computed by the CLI itself from `results`, not taken from the
+job runner's own tally — the runner's summary has no way to express
+"comparison unknown" and does not distinguish "up to date" from "not
+comparable". `list` results omit the comparison fields (`latest_version`,
+`needs_update`); its summary has only `total` and `failed`.
+
+## Exit Codes
+
+| | `check` | `update` | `list` |
+|---|---|---|---|
+| **0** | everything up to date | nothing to do, or all updates succeeded | every device reachable |
+| **1** | at least one device outdated | — | — |
+| **2** | error | at least one update failed | at least one device unreachable |
+
+On mixed results the higher code wins: error (2) beats outdated (1) beats ok
+(0). Exit code 1 only ever occurs for `check`.
+
+**The rule that makes the exit codes trustworthy:** `needs_update: false` also
+means "could not compare" — a failed release lookup reports
+`latest_version: "Unknown"`. That case is never rendered as "up to date, exit
+0"; it is an error (exit 2) and renders as `Vergleich unbekannt`. A cron job
+that silently never alerts because of a rate-limited GitHub lookup would be
+worse than one that never ran.
+
+Other error conditions that produce exit 2: a missing or invalid devices
+file, an empty device list, duplicate IPs in the devices file (rejected
+before any device is touched), and an unreachable device.
+
+## Automation Examples
+
+The exit codes are the point — no `jq`, no output parsing needed for a simple
+alert:
 
 ```bash
-python tasmota_updater.py -f my_devices.yaml
+# Nightly check: alert only if something needs attention.
+python -m app.cli check || mail -s "Tasmota veraltet" me@example.com
 ```
-
-### Dry Run Mode (Simulation)
 
 ```bash
-python tasmota_updater.py --dry-run
+# Unattended weekly update, with a plain-text log for later inspection.
+0 3 * * 0 cd /path/to/tasmota-updater && \
+  python -m app.cli update --log-level INFO >> /var/log/tasmota-cli.log 2>&1
 ```
-
-### Check Firmware Versions Without Updating
 
 ```bash
-python tasmota_updater.py --check-only
+# Inventory for a monitoring script, no GitHub call and no rate-limit risk.
+python -m app.cli list --json
 ```
 
-### Update All Devices (Even Up-to-Date Ones)
+## Interrupting a Run
 
-```bash
-python tasmota_updater.py --update-all
-```
-
-### Specify Custom Log File
-
-```bash
-python tasmota_updater.py --log-file /var/log/tasmota_updates.log
-```
-
-### Use Debug Logging Level
-
-```bash
-python tasmota_updater.py --log-level DEBUG
-```
-
-## Logging
-
-The script logs all operations to both the console and a log file. By default, logs are stored in `logs/tasmota_updater.log`.
-
-Log levels available:
-
-- **DEBUG**: Detailed information, typically useful for diagnosing problems
-- **INFO**: Confirmation that things are working as expected (default)
-- **WARNING**: Indication that something unexpected happened, but the script is still working
-- **ERROR**: Due to a more serious problem, the script has not been able to perform some function
-- **CRITICAL**: A serious error, indicating that the script may be unable to continue running
-
-## Automation
-
-You can schedule regular updates using cron jobs:
-
-```bash
-# Example cron job to run updates every Sunday at 3 AM
-0 3 * * 0 cd /path/to/tasmota-updater && python tasmota_updater.py >> /var/log/tasmota_updates.log 2>&1
-```
+`Ctrl-C` during `update` is caught: the CLI prints a warning to stderr and
+exits 2. An OTA flash already started on a device keeps running there — it is
+not, and cannot be, aborted from the CLI.
 
 ## Next Steps
 
 - [Web Interface Guide](web-interface.md)
+- [API Documentation](api.md)
 - [Configuration Options](configuration.md)
 - [Troubleshooting](troubleshooting.md)

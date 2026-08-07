@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
-"""Deprecated command-line interface for the Tasmota Remote Updater.
+"""Retired command-line interface for the Tasmota Remote Updater.
 
-The CLI is deprecated and no longer maintained. It duplicated the core update
-logic (and had drifted out of sync with it). Use the web interface or the REST
-API instead, which share the maintained core in ``app/tasmota``.
+This entry point is gone: it duplicated the core update logic and had drifted
+out of sync with it. A new, thin CLI over the maintained core lives at
+``app/cli.py`` — invoke it as ``python -m app.cli``.
 
 This stub remains only to give anyone still invoking the old entry point a clear
-message and a pointer to the supported interfaces.
+message and a pointer to the new one.
 """
 import sys
 
 _MESSAGE = """\
-tasmota_updater.py — the command-line interface — is deprecated and no longer
-maintained.
+tasmota_updater.py — the old command-line interface — is gone. It duplicated the
+update logic and had drifted out of sync with it.
 
-Use one of the supported interfaces instead:
-  * Web UI:    python server.py        ->  http://localhost:5001
-  * Container: see README.md / compose.example.yml
-  * REST API:  POST /api/update  and  POST /api/update/all   (docs at /apidocs/)
+There is a new, thin CLI over the maintained core:
+  * python -m app.cli check      compare every device against the latest release
+  * python -m app.cli update     update every outdated device
+  * python -m app.cli list       list configured devices and their firmware
 
-See docs/cli-usage.md for details and migration notes.
+Other interfaces:
+  * Web UI:   python server.py   ->  http://localhost:5001
+  * REST API: POST /api/update, POST /api/update/all   (docs at /apidocs/)
+
+The options of the old CLI (-f/--file aside) do not carry over: --update-all,
+--check-only, --dry-run and --example are gone. See docs/cli-usage.md.
 """
 
 

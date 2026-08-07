@@ -4,14 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Tasmota Remote Updater is a Python Flask application that allows remote updating of multiple Tasmota devices via a web interface and a REST API. The application follows a modular architecture with separate components for core functionality, web interface, and API endpoints. (A CLI existed but is deprecated — see below.)
+Tasmota Remote Updater is a Python Flask application that allows remote updating of multiple Tasmota devices via a web interface, a REST API, and a thin CLI. The application follows a modular architecture with separate components for core functionality, web interface, API endpoints, and the CLI wrapper.
 
 ## Core Architecture
 
 ### Application Structure
 - **Entry Points**:
   - `server.py`: Flask web application with Swagger API documentation
-  - `tasmota_updater.py`: Command-line interface — **DEPRECATED** (stub only; use web UI / REST API)
+  - `app/cli.py`: Command-line interface — thin wrapper over `app/tasmota`, invoked as `python -m app.cli`
+  - `tasmota_updater.py`: Retired entry point — stub only, points at `app/cli.py`
   - `wsgi.py`: WSGI entry point for production deployment
 
 - **Core Module** (`app/tasmota/`):
@@ -23,7 +24,7 @@ Tasmota Remote Updater is a Python Flask application that allows remote updating
 - **Configuration**: YAML-based device configuration with support for authentication and fake devices for testing
 
 ### Key Design Patterns
-- **Modular separation**: the update logic lives in `app/tasmota` and is shared by the web UI and the API (no duplicated copies — that duplication is exactly what killed the CLI)
+- **Modular separation**: the update logic lives in `app/tasmota` and is shared by the web UI, the API and the CLI (no duplicated copies — that duplication is exactly what killed the old CLI)
 - **Security-first**: Credential sanitization in logs, no sensitive data exposure
 - **Fake device support**: Development mode with simulated devices for testing
 - **Environment-based configuration**: `.env` files for different deployment scenarios
@@ -39,11 +40,27 @@ python server.py
 ENV_FILE=.env.dev python server.py
 ```
 
-There is **no working CLI**. `tasmota_updater.py` is a deprecation stub that
-prints a notice to stderr and exits 1 — `-f/--file`, `--dry-run`,
-`--check-only`, `--update-all` and `--example` are all gone. For scripting, use
-the REST API (`POST /api/update`, `POST /api/update/all`, `GET /api/jobs/<id>`).
-Re-introducing a thin CLI over `app/tasmota` is a backlog item.
+```bash
+# CLI: check, update, or list — not installed as a package, always via -m
+python -m app.cli check
+python -m app.cli update --timeout 300
+python -m app.cli list --json
+```
+
+The CLI has three verbs — `check`, `update`, `list` — and is a **thin wrapper
+only**: it resolves the device list and calls into `app/tasmota` (the batch
+job runner and `updater.get_device_firmware_version()`), the same code path
+the web UI and the REST API use. It must never grow its own update logic —
+that duplication, and the resulting drift, is what killed the old
+`tasmota_updater.py`. Exit codes are the contract for automation: `0` ok, `1`
+outdated (`check` only), `2` error; on mixed results the higher code wins. A
+failed release lookup is an error, never "up to date" (see #91's CLI twin).
+Details, the option table and cron examples: `docs/cli-usage.md`.
+
+`tasmota_updater.py` itself is a retired stub: it prints a notice pointing at
+`python -m app.cli` and exits 1. Its old options (`-f/--file` aside,
+`--dry-run`, `--check-only`, `--update-all`, `--example`) do not exist on the
+new CLI.
 
 ### Environment Setup
 ```bash
