@@ -35,7 +35,7 @@ podman run --rm -v ./devices.yaml:/app/devices.yaml:ro \
 | Verb | What it does | Talks to GitHub? |
 |---|---|---|
 | `check` | Compares every configured device against the latest Tasmota release. Reports, never flashes. | Yes |
-| `update` | Classifies every device first, then flashes the outdated ones (or, with `--force`, all reachable ones). | Yes |
+| `update` | Classifies every device first, then flashes the outdated ones. | Yes |
 | `list` | Lists configured devices and the firmware they report. No release lookup at all. | No |
 
 `list` is immune to GitHub rate limits and can never report a device as
@@ -47,7 +47,7 @@ Shared options go **after** the verb:
 
 ```
 python -m app.cli {check|update|list} [-f PATH] [--json] [--log-level LEVEL]
-python -m app.cli update [--timeout SECONDS] [--force]
+python -m app.cli update [--timeout SECONDS]
 ```
 
 `python -m app.cli list --json` works. `python -m app.cli --json list` does
@@ -60,10 +60,12 @@ one.
 | `--json` | Emit a JSON object on stdout instead of a table. |
 | `--log-level LEVEL` | `DEBUG`, `INFO`, `WARNING` (default) or `ERROR`. Logs go to stderr, never stdout, so `--json` output stays parseable regardless of the level. |
 | `--timeout SECONDS` | `update` only. Overrides the per-device total timeout. |
-| `--force` | `update` only. Flashes every configured device, including up-to-date ones — but never a device that could not be reached or classified. |
 
-Without `--force`, `update` only touches devices it classified as outdated —
-the safe default for an unattended run.
+`update` only touches devices it classified as outdated. Re-flashing a
+device that already reports the current version is not supported — the core
+skips it and reports success without touching the device (see
+`update_device_firmware()` in `app/tasmota/updater.py`), so a device that
+misreports its own version cannot be recovered through the CLI today.
 
 ## Output
 
@@ -187,12 +189,12 @@ On mixed results the higher code wins: error (2) beats outdated (1) beats ok
 
 For `update`, exit 2 does not necessarily mean a flash attempt failed:
 `update` classifies every device first and only flashes the ones it selected
-(outdated ones, or — with `--force` — every reachable, comparable one). A
-device it could not reach or could not compare is never flashed at all, but
-it still counts toward `failed`/`comparison_unknown` and still raises the
-exit code to 2. An operator debugging an exit-2 alert should check *which*
-device carries the `nicht erreichbar` or `Vergleich unbekannt` label before
-assuming a flash went wrong — it may be a device `update` never touched.
+as outdated. A device it could not reach or could not compare is never
+flashed at all, but it still counts toward `failed`/`comparison_unknown` and
+still raises the exit code to 2. An operator debugging an exit-2 alert should
+check *which* device carries the `nicht erreichbar` or `Vergleich unbekannt`
+label before assuming a flash went wrong — it may be a device `update` never
+touched.
 
 **The rule that makes the exit codes trustworthy:** `needs_update: false` also
 means "could not compare" — a failed release lookup reports

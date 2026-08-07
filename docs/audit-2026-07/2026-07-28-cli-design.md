@@ -51,7 +51,7 @@ Entry-Point ohne Installation nicht existiert.
 
 ```
 python -m app.cli [-f PATH] [--json] [--log-level LEVEL] {check|update|list}
-python -m app.cli update [--timeout SECONDS] [--force]
+python -m app.cli update [--timeout SECONDS]
 ```
 
 | Option | Bedeutung |
@@ -60,17 +60,20 @@ python -m app.cli update [--timeout SECONDS] [--force]
 | `--json` | Ergebnis als JSON auf stdout statt Tabelle. |
 | `--log-level LEVEL` | Default `WARNING`, damit eine cron-Mail bei Erfolg schlank bleibt. |
 | `--timeout SECONDS` | nur `update`: überschreibt den Gesamt-Timeout pro Gerät. |
-| `--force` | nur `update`: flasht **alle** konfigurierten Geräte, auch aktuelle. |
 
-Ohne `--force` fasst `update` nur veraltete Geräte an — die sichere
-Voreinstellung für einen unbeaufsichtigten Lauf.
+`update` fasst nur veraltete Geräte an — die sichere Voreinstellung für einen
+unbeaufsichtigten Lauf. Ein erneutes Flashen eines Geräts, das bereits die
+aktuelle Version meldet, wird nicht unterstützt: der Kern überspringt es
+(`update_device_firmware()` meldet Erfolg, ohne das Gerät anzufassen). Ein
+Gerät, das seine eigene Version falsch meldet, lässt sich über die CLI
+derzeit deshalb nicht zurückholen.
 
 ## Delegation an den Kern
 
 | Verb | Aufruf |
 |---|---|
 | `check` | `jobs.create_batch_job(devices, check_only=True, update_only_needed=False, global_timeout=None, background=False)` |
-| `update` | `jobs.create_batch_job(devices, check_only=False, update_only_needed=not force, global_timeout=timeout, background=False)` |
+| `update` | `jobs.create_batch_job(devices, check_only=False, update_only_needed=False, global_timeout=timeout, background=False)` — die CLI wählt die Teilmenge selbst aus (siehe Zwei-Pass-Ablauf unten), statt dem Runner-eigenen Filter zu vertrauen |
 | `list` | `updater.get_device_firmware_version(device)` je Gerät, **ohne** `fetch_latest_tasmota_release()` |
 
 Geräte kommen aus `utils.load_devices_from_file()`.
@@ -208,9 +211,8 @@ Bei gemischten Ergebnissen gewinnt der höhere Code: Fehler (2) schlägt
 veraltet (1) schlägt in Ordnung (0). Exit 1 tritt nur bei `check` auf.
 
 Bei `update` heißt Exit 2 also nicht zwingend, dass ein Flash-Versuch
-scheiterte: `update` klassifiziert zuerst alle Geräte und flasht nur die
-ausgewählten (veraltete, oder mit `--force` alle erreichbaren/vergleichbaren).
-Ein nicht erreichbares oder nicht vergleichbares Gerät wird nie geflasht, zählt
+scheiterte: `update` klassifiziert zuerst alle Geräte und flasht nur die als
+veraltet erkannten. Ein nicht erreichbares oder nicht vergleichbares Gerät wird nie geflasht, zählt
 aber trotzdem in `failed`/`comparison_unknown` und hebt den Exit-Code
 weiterhin auf 2 — derselbe Effekt wie bei `check`, nur leichter
 missverständlich, weil man bei `update` zuerst an einen fehlgeschlagenen
@@ -244,7 +246,7 @@ ein cron-Job dann dauerhaft schweigt. Ein unbekannter Vergleich ist ein Fehler
 
 Unit-Tests über den Wrapper mit gemocktem Kern:
 
-- Argument-Parsing je Verb, inklusive der Ablehnung von `--timeout`/`--force`
+- Argument-Parsing je Verb, inklusive der Ablehnung von `--timeout`
   bei `check` und `list`.
 - Die vollständige Exit-Code-Matrix, ausdrücklich mit dem Unknown-Fall und der
   Präzedenz bei gemischten Ergebnissen.
