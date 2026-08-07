@@ -61,7 +61,7 @@ The application supports the following environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SECRET_KEY` | Secret key for Flask sessions | `dev` |
-| `DEVICES_FILE` | Path to the devices configuration file | `devices.yaml` |
+| `DEVICES_FILE` | Path to the devices configuration file | `devices.yaml` (bare metal); `/app/config/devices.yaml` (container image default — see [Container Setup](container-setup.md)) |
 | `LOG_LEVEL` | Logging level | `INFO` |
 | `LOG_FILE` | Path to the log file | `logs/tasmota_updater.log` |
 

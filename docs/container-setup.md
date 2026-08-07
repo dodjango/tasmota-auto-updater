@@ -56,15 +56,19 @@ docker run -d -p 5001:5001 \
 ```
 
 > **Note:** You'll need a `devices.yaml` file in a `config` directory next to
-> the container (e.g. `./config/devices.yaml`) before running it. See the
-> [Configuration Options](configuration.md) documentation for details.
+> the container (e.g. `./config/devices.yaml`) before running it. The image
+> looks for it at `/app/config/devices.yaml` by default — matching the mount
+> shown above — so no `DEVICES_FILE` setting is needed unless you use a
+> different path. See the [Configuration Options](configuration.md)
+> documentation for details.
 >
 > **Migrating from an older version?** If you used to bind-mount
 > `devices.yaml` directly (`-v $(pwd)/devices.yaml:/app/devices.yaml`), it
 > still works — but the web UI's device editor stays read-only and says so,
 > because replacing a bind-mounted *file* fails with `EBUSY`. Move
 > `devices.yaml` into a directory and mount that directory instead, as shown
-> above, and point `DEVICES_FILE` at the new path.
+> above; the default `DEVICES_FILE` already expects it there, so only set
+> that variable yourself if you choose a different path.
 
 ## Manual Container Setup
 
