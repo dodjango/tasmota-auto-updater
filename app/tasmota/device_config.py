@@ -18,6 +18,47 @@ class ConfigWriteError(Exception):
     """The device configuration could not be written."""
 
 
+MANAGED_FIELDS = ("ip", "username", "password", "dns_name", "timeout")
+
+
+def merge_devices(
+    existing: list[dict[str, Any]],
+    submitted: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Merge the editor's view over the configuration on disk.
+
+    The submitted list decides membership and order; a device missing from it is
+    deleted. Everything this module does not manage — ``fake``,
+    ``firmware_info``, fields a later version introduces — is carried over from
+    the existing entry, matched by IP. A password is only replaced when one is
+    submitted, and only removed on explicit request.
+    """
+    by_ip = {device.get("ip"): device for device in existing}
+    merged: list[dict[str, Any]] = []
+
+    for entry in submitted:
+        current = dict(by_ip.get(entry.get("ip"), {}))
+        remove_password = bool(entry.get("remove_password"))
+
+        for field in MANAGED_FIELDS:
+            if field == "password":
+                continue
+            if entry.get(field) not in (None, ""):
+                current[field] = entry[field]
+            else:
+                current.pop(field, None)
+
+        if entry.get("password"):
+            current["password"] = entry["password"]
+        elif remove_password:
+            current.pop("password", None)
+
+        current.pop("remove_password", None)
+        merged.append(current)
+
+    return merged
+
+
 def is_writable(target: Path) -> bool:
     """Can we replace ``target`` atomically?
 

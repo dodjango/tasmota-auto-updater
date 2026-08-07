@@ -97,3 +97,86 @@ def test_write_devices_cleans_up_on_backup_failure(tmp_path, monkeypatch):
 
     assert target.read_text(encoding="utf-8") == original_content
     assert sorted(p.name for p in tmp_path.iterdir()) == ["devices.yaml"]
+
+
+def test_merge_keeps_the_existing_password_when_none_is_submitted():
+    existing = [{"ip": "1.1.1.1", "password": "secret", "username": "admin"}]
+    submitted = [{"ip": "1.1.1.1", "username": "admin"}]
+    assert device_config.merge_devices(existing, submitted) == [
+        {"ip": "1.1.1.1", "username": "admin", "password": "secret"}
+    ]
+
+
+def test_merge_replaces_a_submitted_password():
+    existing = [{"ip": "1.1.1.1", "password": "old"}]
+    submitted = [{"ip": "1.1.1.1", "password": "new"}]
+    assert device_config.merge_devices(existing, submitted) == [
+        {"ip": "1.1.1.1", "password": "new"}
+    ]
+
+
+def test_merge_removes_the_password_on_request():
+    existing = [{"ip": "1.1.1.1", "password": "old"}]
+    submitted = [{"ip": "1.1.1.1", "remove_password": True}]
+    assert device_config.merge_devices(existing, submitted) == [{"ip": "1.1.1.1"}]
+
+
+def test_merge_never_writes_the_control_field():
+    existing = [{"ip": "1.1.1.1"}]
+    submitted = [{"ip": "1.1.1.1", "remove_password": False}]
+    assert "remove_password" not in device_config.merge_devices(existing, submitted)[0]
+
+
+def test_merge_preserves_unmanaged_fields():
+    existing = [
+        {"ip": "1.1.1.1", "fake": True, "firmware_info": {"version": "12.0.2"}, "future": 1}
+    ]
+    submitted = [{"ip": "1.1.1.1", "dns_name": "flur"}]
+    assert device_config.merge_devices(existing, submitted) == [
+        {
+            "ip": "1.1.1.1",
+            "fake": True,
+            "firmware_info": {"version": "12.0.2"},
+            "future": 1,
+            "dns_name": "flur",
+        }
+    ]
+
+
+def test_merge_deletes_a_device_absent_from_the_payload():
+    existing = [{"ip": "1.1.1.1"}, {"ip": "2.2.2.2"}]
+    submitted = [{"ip": "1.1.1.1"}]
+    assert device_config.merge_devices(existing, submitted) == [{"ip": "1.1.1.1"}]
+
+
+def test_merge_treats_a_changed_ip_as_a_new_device():
+    """The password cannot follow an IP change — there is nothing to match on."""
+    existing = [{"ip": "1.1.1.1", "password": "secret", "fake": True}]
+    submitted = [{"ip": "9.9.9.9"}]
+    assert device_config.merge_devices(existing, submitted) == [{"ip": "9.9.9.9"}]
+
+
+def test_merge_adds_a_new_device():
+    existing = [{"ip": "1.1.1.1"}]
+    submitted = [{"ip": "1.1.1.1"}, {"ip": "2.2.2.2", "username": "admin"}]
+    assert device_config.merge_devices(existing, submitted) == [
+        {"ip": "1.1.1.1"},
+        {"ip": "2.2.2.2", "username": "admin"},
+    ]
+
+
+def test_merge_drops_a_managed_field_the_client_cleared():
+    existing = [{"ip": "1.1.1.1", "dns_name": "old", "timeout": 240}]
+    submitted = [{"ip": "1.1.1.1"}]
+    result = device_config.merge_devices(existing, submitted)
+    assert "dns_name" not in result[0], "a cleared managed field is removed"
+    assert "timeout" not in result[0]
+
+
+def test_merge_follows_the_submitted_order():
+    existing = [{"ip": "1.1.1.1"}, {"ip": "2.2.2.2"}]
+    submitted = [{"ip": "2.2.2.2"}, {"ip": "1.1.1.1"}]
+    assert [d["ip"] for d in device_config.merge_devices(existing, submitted)] == [
+        "2.2.2.2",
+        "1.1.1.1",
+    ]
