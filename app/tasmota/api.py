@@ -1,6 +1,7 @@
 """API endpoints for the Tasmota updater web application"""
 
 import os
+from pathlib import Path
 from typing import Any
 from flask import request, jsonify, current_app
 from flask_restful import Api, Resource
@@ -13,6 +14,7 @@ from app.tasmota.updater import (
     is_valid_ip_address,
 )
 from app.tasmota.utils import load_devices_from_file, resolve_dns_name, is_fake_device
+from app.tasmota import device_config
 from app.tasmota import jobs
 
 
@@ -78,6 +80,44 @@ def validate_device_list(devices: list[dict[str, Any]]) -> list[str]:
             errors.append(f"Duplicate device address: {ip}")
         seen.add(ip)
     return errors
+
+
+class DeviceConfigResource(Resource):
+    """The device list as configuration — raw fields, editable.
+
+    Separate from DeviceListResource on purpose: that one is the operational
+    view and enriches its answer (masked password, resolved dns_name falling
+    back to the IP), which must never be written back to the file.
+    """
+
+    def get(self):
+        """
+        Get the raw device configuration
+        ---
+        tags:
+          - configuration
+        responses:
+          200:
+            description: Configured devices, passwords replaced by has_password
+        """
+        devices_file = Path(current_app.config.get('DEVICES_FILE', 'devices.yaml'))
+        devices = load_devices_from_file(str(devices_file))
+
+        exposed = []
+        for device in devices:
+            entry = {
+                field: device[field]
+                for field in ("ip", "username", "dns_name", "timeout")
+                if field in device
+            }
+            entry["has_password"] = bool(device.get("password"))
+            exposed.append(entry)
+
+        return jsonify({
+            "devices": exposed,
+            "writable": device_config.is_writable(devices_file),
+            "devices_file": str(devices_file),
+        })
 
 
 # API Resources
@@ -547,6 +587,7 @@ def init_api(app):
     api = Api(app)
 
     # Register resources
+    api.add_resource(DeviceConfigResource, '/api/config/devices')
     api.add_resource(DeviceListResource, '/api/devices')
     api.add_resource(DeviceStatusResource, '/api/devices/<string:device_ip>')
     api.add_resource(LatestReleaseResource, '/api/releases/latest')
