@@ -308,3 +308,49 @@ def test_cmd_list_treats_a_versionless_answer_as_a_failure(monkeypatch):
     results = cli.cmd_list([{"ip": "192.168.8.194"}])
     assert results[0]["success"] is False
     assert results[0]["current_version"] == "Unknown"
+
+
+def test_cmd_check_delegates_to_the_batch_runner(monkeypatch):
+    seen = {}
+
+    def fake_create(devices, check_only, update_only_needed, global_timeout, **kwargs):
+        seen.update(
+            devices=list(devices),
+            check_only=check_only,
+            update_only_needed=update_only_needed,
+            global_timeout=global_timeout,
+            background=kwargs.get("background"),
+        )
+        return "job-1"
+
+    monkeypatch.setattr(cli.jobs, "create_batch_job", fake_create)
+    monkeypatch.setattr(
+        cli.jobs,
+        "get_job",
+        lambda job_id: {"status": "completed", "results": [_result()], "error": None},
+    )
+
+    results = cli.cmd_check([{"ip": "192.168.8.191"}])
+
+    assert seen["check_only"] is True
+    assert seen["update_only_needed"] is False
+    assert seen["global_timeout"] is None
+    assert seen["background"] is False
+    assert results == [_result()]
+
+
+def test_run_batch_raises_when_the_runner_refuses(monkeypatch):
+    monkeypatch.setattr(cli.jobs, "create_batch_job", lambda *a, **k: None)
+    with pytest.raises(cli.CliError, match="batch job"):
+        cli.run_batch([{"ip": "1"}], check_only=True, timeout=None)
+
+
+def test_run_batch_raises_on_runner_error(monkeypatch):
+    monkeypatch.setattr(cli.jobs, "create_batch_job", lambda *a, **k: "job-1")
+    monkeypatch.setattr(
+        cli.jobs,
+        "get_job",
+        lambda job_id: {"status": "error", "results": [], "error": "boom"},
+    )
+    with pytest.raises(cli.CliError, match="boom"):
+        cli.run_batch([{"ip": "1"}], check_only=True, timeout=None)

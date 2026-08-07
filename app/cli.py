@@ -232,6 +232,44 @@ def render_json(
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False)
 
 
+class CliError(Exception):
+    """A condition that must end the run with EXIT_ERROR."""
+
+
+def run_batch(
+    devices: Sequence[Mapping[str, Any]],
+    *,
+    check_only: bool,
+    timeout: int | None,
+) -> list[dict[str, Any]]:
+    """Run the shared batch runner synchronously and return its results.
+
+    ``update_only_needed`` is always False: the CLI decides itself which
+    devices to touch, because the runner's internal filter drops skipped
+    devices from the results and would hide a failed comparison.
+    """
+    job_id = jobs.create_batch_job(
+        [dict(device) for device in devices],
+        check_only=check_only,
+        update_only_needed=False,
+        global_timeout=timeout,
+        background=False,
+    )
+    if job_id is None:
+        raise CliError("Could not create a batch job — another one is already running.")
+    job = jobs.get_job(job_id)
+    if job is None:
+        raise CliError(f"Batch job {job_id} disappeared before it could be read.")
+    if job.get("status") == "error":
+        raise CliError(str(job.get("error") or "The batch runner failed."))
+    return [dict(result) for result in job.get("results", [])]
+
+
+def cmd_check(devices: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Compare every configured device against the latest release."""
+    return run_batch(devices, check_only=True, timeout=None)
+
+
 def cmd_list(devices: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Inventory: what is configured and what firmware runs on it.
 
