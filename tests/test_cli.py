@@ -267,6 +267,21 @@ def test_render_human_list_marks_unreachable():
     assert "nicht erreichbar" in text
 
 
+def test_render_human_keeps_columns_apart_when_dns_name_overruns_its_width():
+    """A long dns_name must not glue itself to the version column (regression)."""
+    results = [
+        {
+            "ip": "192.168.100.104",
+            "dns_name": "fake-tasmota-slow-device.local",
+            "success": True,
+            "current_version": "11.0.0",
+        }
+    ]
+    text = cli.render_human("list", results, cli.summarize(results, "list"))
+    assert "fake-tasmota-slow-device.local  11.0.0" in text
+    assert "local11.0.0" not in text
+
+
 def test_cmd_list_reports_firmware_without_release_lookup(monkeypatch):
     calls = []
 

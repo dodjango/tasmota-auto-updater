@@ -211,10 +211,15 @@ def render_human(
         else:
             label = _CHECK_LABELS[classify(result)]
         name = str(result.get("dns_name") or "")
-        line = (
-            f"{str(result.get('ip', '?')):<16}{name:<16}{_version_column(result):<20}{label}"
-        )
-        lines.append(line.rstrip())
+        # Padding alone cannot guarantee a separator: a dns_name or version
+        # longer than its column would run straight into the next one. The
+        # join with a fixed separator keeps columns apart even then.
+        columns = [
+            str(result.get("ip", "?")).ljust(15),
+            name.ljust(24),
+            _version_column(result).ljust(18),
+        ]
+        lines.append(("  ".join(columns) + label).rstrip())
     lines.append(_tally_line(command, summary))
     return "\n".join(lines)
 
