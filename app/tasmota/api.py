@@ -159,14 +159,8 @@ class DeviceConfigResource(Resource):
 
         devices_file = Path(current_app.config.get('DEVICES_FILE', 'devices.yaml'))
         try:
-            existing = device_config.read_devices(devices_file)
-        except device_config.ConfigReadError as exc:
-            return {'error': 'Conflict', 'details': str(exc)}, 409
-        merged = device_config.merge_devices(existing, cleaned)
-
-        try:
-            device_config.write_devices(devices_file, merged)
-        except device_config.ConfigWriteError as exc:
+            merged = device_config.replace_devices(devices_file, cleaned)
+        except (device_config.ConfigReadError, device_config.ConfigWriteError) as exc:
             return {'error': 'Conflict', 'details': str(exc)}, 409
 
         current_app.logger.info("Device configuration updated: %d device(s)", len(merged))
