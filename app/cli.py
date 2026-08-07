@@ -64,11 +64,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="Override the per-device total timeout in seconds.",
     )
-    update.add_argument(
-        "--force",
-        action="store_true",
-        help="Flash every configured device, including up-to-date ones.",
-    )
     return parser
 
 
@@ -85,8 +80,20 @@ def classify(result: Mapping[str, Any]) -> str:
     ``needs_update: False`` also means "could not compare" when the release
     lookup failed, so an unknown ``latest_version`` must be recognised before
     anything is called up to date (#91).
+
+    ``success: False`` is not automatically "failed", either: the core also
+    reports it when the device answered fine but the *release* lookup did
+    not (a GitHub rate limit hits every device at once). That device is
+    reachable — it just could not be compared — so it must not read as
+    "nicht erreichbar", which sends an operator looking at the LAN for
+    nothing. A device that reports no usable current_version at all is a
+    real failure regardless of what latest_version says.
     """
     if not result.get("success"):
+        current = result.get("current_version")
+        latest = result.get("latest_version")
+        if current and current != UNKNOWN_VERSION and (not latest or latest == UNKNOWN_VERSION):
+            return "comparison_unknown"
         return "failed"
     latest = result.get("latest_version")
     if not latest or latest == UNKNOWN_VERSION:
@@ -284,7 +291,6 @@ def cmd_check(devices: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
 def cmd_update(
     devices: Sequence[Mapping[str, Any]],
     *,
-    force: bool,
     timeout: int | None,
 ) -> list[dict[str, Any]]:
     """Update outdated devices in two passes: classify, then flash the subset.
@@ -294,10 +300,7 @@ def cmd_update(
     indistinguishable from "everything current".
     """
     checked = run_batch(devices, check_only=True, timeout=None)
-    # With --force, up-to-date devices are flashed too — but never a device we
-    # could not classify: flashing blind is worse than doing nothing.
-    wanted = ("needs_update", "up_to_date") if force else ("needs_update",)
-    selected_ips = [result["ip"] for result in checked if classify(result) in wanted]
+    selected_ips = [result["ip"] for result in checked if classify(result) == "needs_update"]
     if not selected_ips:
         return checked
 
@@ -319,7 +322,8 @@ def cmd_update(
     missing = [ip for ip in selected_ips if ip not in updated]
     if missing:
         raise CliError(
-            "The update pass returned no result for: " + ", ".join(str(ip) for ip in missing)
+            "The update pass returned no result for, or found no device "
+            "configuration for: " + ", ".join(str(ip) for ip in missing)
         )
     return [updated.get(result["ip"], result) for result in checked]
 
@@ -350,7 +354,9 @@ def _duplicate_ips(devices: Sequence[Mapping[str, Any]]) -> list[Any]:
 
     Two entries sharing an IP would silently collapse inside ``cmd_update``'s
     IP-to-config mapping: one config gets flashed twice with the wrong
-    credentials while the other is never touched.
+    credentials while the other is never touched. ``main()`` calls this
+    before dispatching to any command, so that collapse is a risk this guard
+    forecloses, not a live hazard inside ``cmd_update`` itself.
     """
     counts = Counter(device.get("ip") for device in devices)
     return [ip for ip, count in counts.items() if count > 1]
@@ -387,7 +393,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     devices = utils.load_devices_from_file(devices_file)
     if not devices:
-        print(f"No devices configured in {devices_file}", file=sys.stderr)
+        # load_devices_from_file() swallows its own parse errors and returns
+        # [] either way, so this covers both "no devices configured" and "the
+        # YAML could not be parsed" — check stderr above for the latter.
+        print(
+            f"No devices configured in {devices_file}, or the file could not "
+            "be parsed — see any parser error above.",
+            file=sys.stderr,
+        )
         return EXIT_ERROR
 
     duplicates = _duplicate_ips(devices)
@@ -405,7 +418,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "check":
             results = cmd_check(devices)
         else:
-            results = cmd_update(devices, force=args.force, timeout=args.timeout)
+            results = cmd_update(devices, timeout=args.timeout)
     except CliError as exc:
         print(str(exc), file=sys.stderr)
         return EXIT_ERROR

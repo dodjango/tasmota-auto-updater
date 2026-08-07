@@ -23,9 +23,8 @@ def test_parser_accepts_each_command(command):
 
 
 def test_parser_accepts_update_options():
-    args = cli.build_parser().parse_args(["update", "--timeout", "300", "--force"])
+    args = cli.build_parser().parse_args(["update", "--timeout", "300"])
     assert args.timeout == 300
-    assert args.force is True
 
 
 def test_parser_accepts_shared_options_after_verb():
@@ -42,7 +41,7 @@ def test_parser_rejects_shared_options_before_verb():
 @pytest.mark.parametrize("command", ["check", "list"])
 def test_parser_rejects_update_options_on_other_commands(command):
     with pytest.raises(SystemExit):
-        cli.build_parser().parse_args([command, "--force"])
+        cli.build_parser().parse_args([command, "--timeout", "300"])
 
 
 def test_resolve_devices_file_prefers_explicit_path():
@@ -92,8 +91,27 @@ def test_classify_up_to_date():
     assert cli.classify(_result()) == "up_to_date"
 
 
-def test_classify_failure_wins_over_unknown():
-    assert cli.classify(_result(success=False, latest_version="Unknown")) == "failed"
+def test_classify_failure_wins_over_unknown_when_truly_unreachable():
+    """A device that never answered has no current_version either — that is
+    a real failure, not just a stalled comparison."""
+    result = _result(success=False, latest_version="Unknown", current_version="Unknown")
+    assert cli.classify(result) == "failed"
+
+
+def test_classify_release_lookup_failure_is_comparison_unknown_not_failed():
+    """success=False with a known current_version but an unknown
+    latest_version means the device answered fine — only the release lookup
+    (e.g. GitHub rate limit) failed. That must not read as unreachable (#91's
+    CLI twin, finding 2)."""
+    result = _result(success=False, current_version="14.6.0", latest_version="Unknown")
+    assert cli.classify(result) == "comparison_unknown"
+
+
+def test_classify_failed_update_with_known_latest_version_is_still_failed():
+    """A genuine flash failure carries a known latest_version — it must not
+    be reclassified as comparison_unknown just because success is False."""
+    result = _result(success=False, current_version="14.6.0", latest_version="15.0.1")
+    assert cli.classify(result) == "failed"
 
 
 def test_summarize_check_counts_every_class():
@@ -403,7 +421,7 @@ def test_cmd_update_only_touches_outdated_devices(monkeypatch):
 
     monkeypatch.setattr(cli, "run_batch", fake_run_batch)
 
-    results = cli.cmd_update([{"ip": "1"}, {"ip": "2"}], force=False, timeout=None)
+    results = cli.cmd_update([{"ip": "1"}, {"ip": "2"}], timeout=None)
 
     assert passes[0] == {"ips": ["1", "2"], "check_only": True}
     assert passes[1] == {"ips": ["1"], "check_only": False}
@@ -421,7 +439,7 @@ def test_cmd_update_skips_the_second_pass_when_nothing_is_outdated(monkeypatch):
         return [_result(ip="1")]
 
     monkeypatch.setattr(cli, "run_batch", fake_run_batch)
-    results = cli.cmd_update([{"ip": "1"}], force=False, timeout=None)
+    results = cli.cmd_update([{"ip": "1"}], timeout=None)
 
     assert passes == [True]
     assert results == [_result(ip="1")]
@@ -435,25 +453,10 @@ def test_cmd_update_does_not_flash_on_unknown_comparison(monkeypatch):
         return [_result(ip="1", latest_version="Unknown")]
 
     monkeypatch.setattr(cli, "run_batch", fake_run_batch)
-    results = cli.cmd_update([{"ip": "1"}], force=False, timeout=None)
+    results = cli.cmd_update([{"ip": "1"}], timeout=None)
 
     assert passes == [True], "an unknown comparison must not trigger a flash"
     assert cli.classify(results[0]) == "comparison_unknown"
-
-
-def test_cmd_update_force_updates_every_reachable_device(monkeypatch):
-    passes = []
-
-    def fake_run_batch(devices, *, check_only, timeout):
-        passes.append({"ips": [d["ip"] for d in devices], "check_only": check_only})
-        if check_only:
-            return [_result(ip="1"), _result(ip="2", success=False)]
-        return [_result(ip="1", update_completed=True)]
-
-    monkeypatch.setattr(cli, "run_batch", fake_run_batch)
-    cli.cmd_update([{"ip": "1"}, {"ip": "2"}], force=True, timeout=None)
-
-    assert passes[1] == {"ips": ["1"], "check_only": False}, "unreachable devices stay out"
 
 
 def test_cmd_update_passes_the_timeout_to_the_second_pass_only(monkeypatch):
@@ -464,7 +467,7 @@ def test_cmd_update_passes_the_timeout_to_the_second_pass_only(monkeypatch):
         return [_result(ip="1", needs_update=True)] if check_only else [_result(ip="1")]
 
     monkeypatch.setattr(cli, "run_batch", fake_run_batch)
-    cli.cmd_update([{"ip": "1"}], force=False, timeout=300)
+    cli.cmd_update([{"ip": "1"}], timeout=300)
 
     assert seen == [(True, None), (False, 300)]
 
@@ -481,11 +484,11 @@ def test_cmd_update_raises_when_the_flash_pass_drops_a_selected_device(monkeypat
     monkeypatch.setattr(cli, "run_batch", fake_run_batch)
 
     with pytest.raises(cli.CliError) as excinfo:
-        cli.cmd_update([{"ip": "1"}, {"ip": "2"}], force=False, timeout=None)
+        cli.cmd_update([{"ip": "1"}, {"ip": "2"}], timeout=None)
 
     message = str(excinfo.value)
-    assert re.search(r"no result for: 2$", message)
-    assert "1" not in message.split("no result for:")[1]
+    assert re.search(r"configuration for: 2$", message)
+    assert "1" not in message.split("configuration for:")[1]
 
 
 def test_cmd_update_raises_without_calling_the_runner_when_the_whole_subset_is_unmapped(
@@ -501,26 +504,10 @@ def test_cmd_update_raises_without_calling_the_runner_when_the_whole_subset_is_u
 
     # "9" is not a configured device, so the selected IP from pass one can
     # never be mapped back to a device to flash — the subset is empty.
-    with pytest.raises(cli.CliError, match=r"no result for: 1$"):
-        cli.cmd_update([{"ip": "9"}], force=False, timeout=None)
+    with pytest.raises(cli.CliError, match=r"configuration for: 1$"):
+        cli.cmd_update([{"ip": "9"}], timeout=None)
 
     assert calls == [True], "the flash pass must not run against an empty subset"
-
-
-def test_cmd_update_force_does_not_flash_a_device_with_unknown_comparison(monkeypatch):
-    passes = []
-
-    def fake_run_batch(devices, *, check_only, timeout):
-        passes.append({"ips": [d["ip"] for d in devices], "check_only": check_only})
-        if check_only:
-            return [_result(ip="1", latest_version="Unknown")]
-        return [_result(ip="1", update_completed=True)]
-
-    monkeypatch.setattr(cli, "run_batch", fake_run_batch)
-    results = cli.cmd_update([{"ip": "1"}], force=True, timeout=None)
-
-    assert len(passes) == 1, "a device with an unknown comparison must never be flashed"
-    assert results == [_result(ip="1", latest_version="Unknown")]
 
 
 def test_main_writes_only_json_to_stdout_at_debug_level(monkeypatch, capsys, tmp_path):
@@ -587,7 +574,7 @@ def test_main_handles_interrupt_and_warns_about_the_running_flash(monkeypatch, c
     devices_file = tmp_path / "devices.yaml"
     devices_file.write_text("devices:\n  - ip: 1\n", encoding="utf-8")
 
-    def interrupt(devices, *, force, timeout):
+    def interrupt(devices, *, timeout):
         raise KeyboardInterrupt
 
     monkeypatch.setattr(cli, "cmd_update", interrupt)
