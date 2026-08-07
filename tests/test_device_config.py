@@ -122,9 +122,10 @@ def test_merge_removes_the_password_on_request():
 
 
 def test_merge_never_writes_the_control_field():
-    existing = [{"ip": "1.1.1.1"}]
-    submitted = [{"ip": "1.1.1.1", "remove_password": False}]
-    assert "remove_password" not in device_config.merge_devices(existing, submitted)[0]
+    """A stray control field in the file on disk must not survive the merge."""
+    existing = [{"ip": "1.1.1.1", "remove_password": True}]
+    submitted = [{"ip": "1.1.1.1"}]
+    assert device_config.merge_devices(existing, submitted) == [{"ip": "1.1.1.1"}]
 
 
 def test_merge_preserves_unmanaged_fields():
@@ -180,3 +181,10 @@ def test_merge_follows_the_submitted_order():
         "2.2.2.2",
         "1.1.1.1",
     ]
+
+
+def test_merge_skips_entries_without_an_ip_on_either_side():
+    """An ip-less entry cannot be matched and must not leak another device's data."""
+    existing = [{"fake": True, "firmware_info": {"version": "12.0.2"}}, {"ip": "1.1.1.1"}]
+    submitted = [{}, {"ip": "1.1.1.1"}]
+    assert device_config.merge_devices(existing, submitted) == [{"ip": "1.1.1.1"}]

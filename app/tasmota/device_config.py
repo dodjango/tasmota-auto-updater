@@ -5,6 +5,7 @@ writes it. It deliberately holds no HTTP or update logic.
 """
 from __future__ import annotations
 
+import copy
 import os
 import shutil
 import tempfile
@@ -18,7 +19,7 @@ class ConfigWriteError(Exception):
     """The device configuration could not be written."""
 
 
-MANAGED_FIELDS = ("ip", "username", "password", "dns_name", "timeout")
+MANAGED_FIELDS: tuple[str, ...] = ("ip", "username", "password", "dns_name", "timeout")
 
 
 def merge_devices(
@@ -31,13 +32,19 @@ def merge_devices(
     deleted. Everything this module does not manage — ``fake``,
     ``firmware_info``, fields a later version introduces — is carried over from
     the existing entry, matched by IP. A password is only replaced when one is
-    submitted, and only removed on explicit request.
+    submitted, and only removed on explicit request. An entry without an ``ip``
+    is skipped on both sides — it cannot be matched and must not be written. If
+    the file on disk has duplicate IPs, the last one wins; earlier duplicates
+    are dropped.
     """
-    by_ip = {device.get("ip"): device for device in existing}
+    by_ip = {device["ip"]: device for device in existing if device.get("ip")}
     merged: list[dict[str, Any]] = []
 
     for entry in submitted:
-        current = dict(by_ip.get(entry.get("ip"), {}))
+        if not entry.get("ip"):
+            continue
+
+        current = copy.deepcopy(by_ip.get(entry["ip"], {}))
         remove_password = bool(entry.get("remove_password"))
 
         for field in MANAGED_FIELDS:
