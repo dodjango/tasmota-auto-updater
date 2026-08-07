@@ -12,10 +12,10 @@ def test_parser_requires_a_command():
 
 @pytest.mark.parametrize("command", ["check", "update", "list"])
 def test_parser_accepts_each_command(command):
-    args = cli.build_parser().parse_args([command])
+    args = cli.build_parser().parse_args([command, "--json"])
     assert args.command == command
+    assert args.json is True
     assert args.file is None
-    assert args.json is False
     assert args.log_level == "WARNING"
 
 
@@ -23,6 +23,17 @@ def test_parser_accepts_update_options():
     args = cli.build_parser().parse_args(["update", "--timeout", "300", "--force"])
     assert args.timeout == 300
     assert args.force is True
+
+
+def test_parser_accepts_shared_options_after_verb():
+    args = cli.build_parser().parse_args(["check", "-f", "custom.yaml", "--log-level", "DEBUG"])
+    assert args.file == "custom.yaml"
+    assert args.log_level == "DEBUG"
+
+
+def test_parser_rejects_shared_options_before_verb():
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["--json", "check"])
 
 
 @pytest.mark.parametrize("command", ["check", "list"])
