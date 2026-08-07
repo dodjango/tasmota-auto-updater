@@ -1,4 +1,6 @@
 """Unit tests for the thin CLI wrapper (app/cli.py)."""
+import json
+
 import pytest
 
 from app import cli
@@ -185,3 +187,56 @@ def test_exit_code_list_reports_unreachable_device():
 def test_exit_code_list_ignores_comparison():
     summary = cli.summarize([_result(latest_version="Unknown")], "list")
     assert cli.exit_code_for("list", summary) == cli.EXIT_OK
+
+
+def test_render_human_labels_each_class():
+    results = [
+        _result(ip="192.168.8.191", needs_update=True, dns_name="flur"),
+        _result(ip="192.168.8.192", dns_name="kueche"),
+        _result(ip="192.168.8.193", latest_version="Unknown", dns_name="bad"),
+        _result(ip="192.168.8.194", success=False, dns_name="keller"),
+    ]
+    text = cli.render_human("check", results, cli.summarize(results, "check"))
+    assert "192.168.8.191" in text
+    assert "Update verfügbar" in text
+    assert "aktuell" in text
+    assert "Vergleich unbekannt" in text
+    assert "nicht erreichbar" in text
+
+
+def test_render_human_uses_update_labels():
+    results = [
+        _result(ip="1", needs_update=True, update_completed=True),
+        _result(ip="2"),
+        _result(ip="3", success=False, update_started=True),
+    ]
+    text = cli.render_human("update", results, cli.summarize(results, "update"))
+    assert "aktualisiert" in text
+    assert "übersprungen" in text
+    assert "Update fehlgeschlagen" in text
+    assert "Update verfügbar" not in text
+
+
+def test_render_human_ends_with_the_tally():
+    results = [_result(needs_update=True)]
+    text = cli.render_human("check", results, cli.summarize(results, "check"))
+    assert text.splitlines()[-1] == "0 aktuell, 1 Update verfügbar, 0 Vergleich unbekannt, 0 Fehler"
+
+
+def test_render_json_is_parseable_and_complete():
+    results = [_result(needs_update=True)]
+    summary = cli.summarize(results, "check")
+    payload = json.loads(
+        cli.render_json("check", "devices.yaml", results, summary, cli.EXIT_OUTDATED)
+    )
+    assert payload["command"] == "check"
+    assert payload["devices_file"] == "devices.yaml"
+    assert payload["exit_code"] == cli.EXIT_OUTDATED
+    assert payload["summary"] == summary
+    assert payload["results"][0]["ip"] == "192.168.8.191"
+
+
+def test_render_json_passes_core_fields_through_unchanged():
+    results = [_result(message="anything the core said")]
+    payload = json.loads(cli.render_json("check", "d.yaml", results, {}, cli.EXIT_OK))
+    assert payload["results"][0]["message"] == "anything the core said"

@@ -7,6 +7,7 @@ killed the previous CLI (Phase 4 of the 2026-07 audit).
 from __future__ import annotations
 
 import argparse
+import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -132,3 +133,87 @@ def exit_code_for(command: str, summary: Mapping[str, int]) -> int:
     if command == "check" and summary.get("needs_update"):
         return EXIT_OUTDATED
     return EXIT_OK
+
+
+_CHECK_LABELS = {
+    "failed": "nicht erreichbar",
+    "comparison_unknown": "Vergleich unbekannt",
+    "needs_update": "Update verfügbar",
+    "up_to_date": "aktuell",
+}
+
+
+def _update_label(result: Mapping[str, Any]) -> str:
+    """Label for an update run. A just-updated device still carries
+    ``needs_update`` from its pre-update comparison, so the class alone lies."""
+    if result.get("update_completed"):
+        return "aktualisiert"
+    if not result.get("success"):
+        return "Update fehlgeschlagen" if result.get("update_started") else "nicht erreichbar"
+    if classify(result) == "comparison_unknown":
+        return "Vergleich unbekannt"
+    return "übersprungen (aktuell)"
+
+
+def _version_column(result: Mapping[str, Any]) -> str:
+    """Format the version column: current, current→latest, or —."""
+    current = result.get("current_version") or "—"
+    if not result.get("success"):
+        return "—"
+    if classify(result) == "needs_update":
+        return f"{current} → {result.get('latest_version')}"
+    return str(current)
+
+
+def _tally_line(command: str, summary: Mapping[str, int]) -> str:
+    """Format the summary line, tailored to the command."""
+    if command == "list":
+        return f"{summary.get('total', 0)} Geräte, {summary.get('failed', 0)} Fehler"
+    if command == "update":
+        return (
+            f"{summary.get('updated', 0)} aktualisiert, "
+            f"{summary.get('skipped', 0)} übersprungen, "
+            f"{summary.get('comparison_unknown', 0)} Vergleich unbekannt, "
+            f"{summary.get('failed', 0)} Fehler"
+        )
+    return (
+        f"{summary.get('up_to_date', 0)} aktuell, "
+        f"{summary.get('needs_update', 0)} Update verfügbar, "
+        f"{summary.get('comparison_unknown', 0)} Vergleich unbekannt, "
+        f"{summary.get('failed', 0)} Fehler"
+    )
+
+
+def render_human(
+    command: str,
+    results: Sequence[Mapping[str, Any]],
+    summary: Mapping[str, int],
+) -> str:
+    """One line per device plus a closing tally, sized for a cron mail."""
+    lines = []
+    for result in results:
+        label = _update_label(result) if command == "update" else _CHECK_LABELS[classify(result)]
+        name = str(result.get("dns_name") or "")
+        lines.append(
+            f"{str(result.get('ip', '?')):<16}{name:<16}{_version_column(result):<20}{label}"
+        )
+    lines.append(_tally_line(command, summary))
+    return "\n".join(lines)
+
+
+def render_json(
+    command: str,
+    devices_file: str,
+    results: Sequence[Mapping[str, Any]],
+    summary: Mapping[str, int],
+    exit_code: int,
+) -> str:
+    """Emit the core result dicts unchanged, plus tally and exit code."""
+    payload = {
+        "command": command,
+        "devices_file": devices_file,
+        "results": [dict(result) for result in results],
+        "summary": dict(summary),
+        "exit_code": exit_code,
+    }
+    return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False)
