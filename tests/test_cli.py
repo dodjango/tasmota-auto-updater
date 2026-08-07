@@ -264,3 +264,36 @@ def test_render_human_list_marks_unreachable():
     results = [{"ip": "192.168.8.192", "success": False, "current_version": "14.0.0"}]
     text = cli.render_human("list", results, cli.summarize(results, "list"))
     assert "nicht erreichbar" in text
+
+
+def test_cmd_list_reports_firmware_without_release_lookup(monkeypatch):
+    calls = []
+
+    def fake_firmware(device):
+        calls.append(device["ip"])
+        return {"version": "15.0.1", "core_version": "2.7.4.9"}
+
+    def explode():  # must never be called
+        raise AssertionError("list must not perform a release lookup")
+
+    monkeypatch.setattr(cli.updater, "get_device_firmware_version", fake_firmware)
+    monkeypatch.setattr(cli.updater, "fetch_latest_tasmota_release", explode)
+
+    devices = [{"ip": "192.168.8.191", "dns_name": "flur"}, {"ip": "192.168.8.192"}]
+    results = cli.cmd_list(devices)
+
+    assert calls == ["192.168.8.191", "192.168.8.192"]
+    assert results[0] == {
+        "ip": "192.168.8.191",
+        "dns_name": "flur",
+        "success": True,
+        "current_version": "15.0.1",
+    }
+    assert "latest_version" not in results[0]
+
+
+def test_cmd_list_marks_unreachable_device(monkeypatch):
+    monkeypatch.setattr(cli.updater, "get_device_firmware_version", lambda device: None)
+    results = cli.cmd_list([{"ip": "192.168.8.193"}])
+    assert results[0]["success"] is False
+    assert results[0]["current_version"] == "Unknown"

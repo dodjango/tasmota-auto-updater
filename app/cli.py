@@ -11,6 +11,8 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from app.tasmota import jobs, updater, utils
+
 EXIT_OK = 0
 EXIT_OUTDATED = 1
 EXIT_ERROR = 2
@@ -228,3 +230,23 @@ def render_json(
         "exit_code": exit_code,
     }
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False)
+
+
+def cmd_list(devices: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Inventory: what is configured and what firmware runs on it.
+
+    Deliberately LAN-only — no release lookup, so no GitHub rate limit can
+    break it, and it can never report "outdated".
+    """
+    results: list[dict[str, Any]] = []
+    for device in devices:
+        info = updater.get_device_firmware_version(dict(device))
+        result: dict[str, Any] = {
+            "ip": device.get("ip"),
+            "success": info is not None,
+            "current_version": (info or {}).get("version", UNKNOWN_VERSION),
+        }
+        if device.get("dns_name"):
+            result["dns_name"] = device["dns_name"]
+        results.append(result)
+    return results
