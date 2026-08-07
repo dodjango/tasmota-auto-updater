@@ -64,21 +64,33 @@ funktionsunfähig. **Entscheidung: deprecaten** — die ~900 Zeilen duplizierten
 die Update-Logik aus `app/tasmota` und waren davon weggelaufen. Heute ist die
 Datei ein Stub (Notice auf stderr, Exit 1).
 
-**Offen / Backlog — dünne CLI-Schicht für Automatisierungen.** Der
+**Dünne CLI-Schicht für Automatisierungen — ✅ erledigt.** Der
 Deprecation-Grund war die *Duplikation*, nicht der Nutzen: ein CLI ist für
-Cron/Skripte weiterhin sinnvoll (Wunsch des Users, 2026-07-26). Nachziehen als
-dünner Wrapper **über** dem gepflegten Kern in `app/tasmota` — keine zweite
-Kopie der Logik:
+Cron/Skripte weiterhin sinnvoll (Wunsch des Users, 2026-07-26). Umgesetzt als
+dünner Wrapper **über** dem gepflegten Kern in `app/tasmota`, ohne zweite
+Kopie der Logik — Design und Plan:
+[`2026-07-28-cli-design.md`](2026-07-28-cli-design.md),
+[`2026-07-28-cli-plan.md`](2026-07-28-cli-plan.md).
 
-- Optionen wie früher: `-f/--file`, `--check-only`, `--dry-run`, `--update-all`,
-  `--non-interactive`, `--log-level`.
-- Ruft `update_device_firmware()` / den Job-Runner direkt auf, ohne laufenden
-  Server und ohne API-Key (das ist der Vorteil gegenüber `curl` auf die REST-API).
-- Exit-Codes maschinenlesbar (0 = nichts zu tun / alles aktualisiert, ≠ 0 =
-  Fehler), Ausgabe optional als JSON für Weiterverarbeitung.
-- Tests: Unit über den Wrapper (Kern gemockt) + ein Smoke-Lauf gegen Fake-Devices.
-- `docs/cli-usage.md` und die README-Feature-Liste („Three powerful interfaces")
-  wieder in Einklang bringen.
+Abweichungen vom ursprünglichen Backlog-Eintrag oben:
+
+- **Verben statt Flags:** `python -m app.cli {check|update|list}` statt
+  `--check-only`/`--update-all`. Drei Verben sind klarer, und die alte Syntax
+  war ohnehin nicht kompatibel.
+- **Kein `--dry-run`:** doppelt zum Verb `check`.
+- **Kein `--non-interactive`:** die CLI ist immer nicht-interaktiv; kein
+  Wizard, keine Bestätigungsabfrage vor `update`.
+- **Kein Einzelgeräte-Verb** (`update <ip>`): kein Bedarf, die Web-UI deckt
+  Ad-hoc-Eingriffe ab.
+- **Aufruf bleibt `python -m app.cli`,** kein Konsolen-Skript: das Projekt
+  wird nirgends installiert (weder lokal noch im Containerfile), ein
+  Entry-Point ohne Installation existiert nicht. (`pyproject.toml` bekommt
+  trotzdem einen `[project.scripts]`-Eintrag für den Fall einer Installation —
+  die Doku verspricht ihn aber nicht als Standardweg.)
+- `-f/--file` und `--log-level` blieben erhalten.
+
+`docs/cli-usage.md` und die README-Feature-Liste sind wieder in Einklang mit
+dem Ist-Zustand.
 
 ### Phase 5 — Architektur & Wartbarkeit · #73  (teilweise erledigt)
 `updater.py` entflechten; Cache-Locking über Worker; Excepts differenzieren;
