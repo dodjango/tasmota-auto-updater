@@ -67,18 +67,25 @@ docker pull ghcr.io/dodjango/tasmota-updater:latest
 
 # Run with Docker
 docker run -d -p 5001:5001 \
-  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/config:/app/config \
   -v $(pwd)/logs:/app/logs \
   --name tasmota-updater dodjango/tasmota-updater:latest
 
 # OR run with Podman
 podman run -d -p 5001:5001 \
-  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/config:/app/config \
   -v $(pwd)/logs:/app/logs \
   --name tasmota-updater dodjango/tasmota-updater:latest
 ```
 
 Then visit http://localhost:5001 in your browser.
+
+> **Migrating from an older version?** If you used to bind-mount
+> `devices.yaml` directly (`-v $(pwd)/devices.yaml:/app/devices.yaml`), that
+> still works, but the web UI's device editor stays read-only — replacing a
+> bind-mounted *file* fails with `EBUSY`. Move `devices.yaml` into a directory
+> (e.g. `./config/devices.yaml`) and mount that directory instead, as shown
+> above, to make the editor writable.
 
 ## 📚 Documentation
 

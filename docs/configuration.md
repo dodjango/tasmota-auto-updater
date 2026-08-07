@@ -28,6 +28,32 @@ devices:
 - `username`: Username for authentication (if the device requires it)
 - `password`: Password for authentication (if the device requires it)
 
+## Editing Devices in the Web UI
+
+The web interface includes a devices editor (under "Manage Devices") that reads and writes
+`devices.yaml` directly — no need to edit the file by hand or restart the app. It manages the
+same fields as the YAML file: `ip`, `dns_name`, `username`, `password` and `timeout`. Fields the
+editor does not manage (such as `fake` and cached `firmware_info`) are preserved as-is.
+
+A few behaviours are easy to miss:
+
+- **The password field is write-only.** The server never sends stored passwords back to the
+  browser, so the field always starts empty. Leave it blank and save to keep the existing
+  password; use "Remove password" to delete it explicitly.
+- **Changing a device's IP address creates a new device.** The editor matches existing entries by
+  IP to know which stored password belongs to which device. If you change the IP, the password is
+  not carried over — enter it again after the IP change.
+- **Comments in `devices.yaml` are lost when the UI saves.** The editor rewrites the whole file
+  from its in-memory model, so any hand-written comments in the YAML will not survive a save made
+  through the web UI.
+- **One backup generation is kept.** Every save copies the previous file to `devices.yaml.bak`
+  before writing the new one, so only the file from immediately before the last save is
+  recoverable — each subsequent save overwrites that backup in turn.
+- **The editor can be read-only.** If `devices.yaml` is bind-mounted into the container as a
+  single file rather than as part of a mounted directory, the file cannot be replaced atomically
+  (`EBUSY`) and the editor disables itself with an explanation. See
+  [Container Setup](container-setup.md) for the directory-mount migration.
+
 ## Environment Variables
 
 The application supports the following environment variables:

@@ -37,7 +37,7 @@ docker pull dodjango/tasmota-updater:latest
 
 # Run the container
 docker run -d -p 5001:5001 \
-  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/config:/app/config \
   -v $(pwd)/logs:/app/logs \
   --name tasmota-updater dodjango/tasmota-updater:latest
 ```
@@ -50,12 +50,21 @@ docker pull ghcr.io/dodjango/tasmota-updater:latest
 
 # Run the container
 docker run -d -p 5001:5001 \
-  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/config:/app/config \
   -v $(pwd)/logs:/app/logs \
   --name tasmota-updater ghcr.io/dodjango/tasmota-updater:latest
 ```
 
-> **Note:** You'll need to create a `devices.yaml` file in your current directory before running the container. See the [Configuration Options](configuration.md) documentation for details.
+> **Note:** You'll need a `devices.yaml` file in a `config` directory next to
+> the container (e.g. `./config/devices.yaml`) before running it. See the
+> [Configuration Options](configuration.md) documentation for details.
+>
+> **Migrating from an older version?** If you used to bind-mount
+> `devices.yaml` directly (`-v $(pwd)/devices.yaml:/app/devices.yaml`), it
+> still works — but the web UI's device editor stays read-only and says so,
+> because replacing a bind-mounted *file* fails with `EBUSY`. Move
+> `devices.yaml` into a directory and mount that directory instead, as shown
+> above, and point `DEVICES_FILE` at the new path.
 
 ## Manual Container Setup
 
@@ -69,7 +78,7 @@ docker build -f Containerfile -t tasmota-updater .
 
 # Run the container
 docker run -d -p 5001:5001 \
-  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/config:/app/config \
   -v $(pwd)/logs:/app/logs \
   --name tasmota-updater tasmota-updater
 ```
@@ -82,7 +91,7 @@ podman build -f Containerfile -t tasmota-updater .
 
 # Run the container
 podman run -d -p 5001:5001 \
-  -v $(pwd)/devices.yaml:/app/devices.yaml:Z \
+  -v $(pwd)/config:/app/config:Z \
   -v $(pwd)/logs:/app/logs:Z \
   --name tasmota-updater tasmota-updater
 ```
@@ -98,7 +107,7 @@ environment:
   - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
   - PORT=5001
   - HOST=0.0.0.0
-  - DEVICES_FILE=${DEVICES_FILE:-devices.yaml}
+  - DEVICES_FILE=${DEVICES_FILE:-/app/config/devices.yaml}
   - GUNICORN_WORKERS=${GUNICORN_WORKERS:-4}
   - ENV_FILE=
 ```
@@ -130,7 +139,10 @@ Recommendation:
 
 The container setup includes two volumes:
 
-- `./devices.yaml:/app/devices.yaml` - Maps your local devices configuration file into the container
+- `./config:/app/config` - Maps a local directory holding `devices.yaml` into the container. The
+  *directory* is mounted, not the file, so the built-in devices editor can replace the file
+  atomically when you save changes in the UI — replacing a bind-mounted single file fails with
+  `EBUSY`.
 - `./logs:/app/logs` - Maps the logs directory to persist logs outside the container
 
 You can add additional volumes as needed for your specific use case.
@@ -142,7 +154,7 @@ For production deployments, the container uses Gunicorn as the WSGI server. You 
 ```bash
 docker run -d -p 5001:5001 \
   -e GUNICORN_WORKERS=8 \
-  -v $(pwd)/devices.yaml:/app/devices.yaml \
+  -v $(pwd)/config:/app/config \
   -v $(pwd)/logs:/app/logs \
   --name tasmota-updater tasmota-updater
 ```
