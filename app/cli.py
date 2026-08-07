@@ -8,7 +8,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import os
+import sys
+from collections import Counter
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 from app.tasmota import jobs, updater, utils
@@ -332,3 +337,88 @@ def cmd_list(devices: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             result["dns_name"] = device["dns_name"]
         results.append(result)
     return results
+
+
+def _duplicate_ips(devices: Sequence[Mapping[str, Any]]) -> list[Any]:
+    """Return IPs that appear more than once, in first-seen order.
+
+    Two entries sharing an IP would silently collapse inside ``cmd_update``'s
+    IP-to-config mapping: one config gets flashed twice with the wrong
+    credentials while the other is never touched.
+    """
+    counts = Counter(device.get("ip") for device in devices)
+    return [ip for ip, count in counts.items() if count > 1]
+
+
+def _configure_logging(level: str) -> None:
+    """All logging goes to stderr so stdout stays parseable with --json."""
+    logging.basicConfig(
+        level=getattr(logging, level),
+        stream=sys.stderr,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+
+
+def _load_env() -> None:
+    """Honour ENV_FILE like server.py does, so ENV_FILE=.env.dev works."""
+    env_file = Path(os.environ.get("ENV_FILE", ".env"))
+    if env_file.exists():
+        from dotenv import load_dotenv
+
+        load_dotenv(str(env_file))
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Entry point. Returns the exit code, never raises for expected failures."""
+    args = build_parser().parse_args(argv)
+    _configure_logging(args.log_level)
+    _load_env()
+
+    devices_file = resolve_devices_file(args.file, os.environ)
+    if not Path(devices_file).exists():
+        print(f"Devices file not found: {devices_file}", file=sys.stderr)
+        return EXIT_ERROR
+
+    devices = utils.load_devices_from_file(devices_file)
+    if not devices:
+        print(f"No devices configured in {devices_file}", file=sys.stderr)
+        return EXIT_ERROR
+
+    duplicates = _duplicate_ips(devices)
+    if duplicates:
+        print(
+            "Duplicate IP(s) in "
+            f"{devices_file}: {', '.join(str(ip) for ip in duplicates)}",
+            file=sys.stderr,
+        )
+        return EXIT_ERROR
+
+    try:
+        if args.command == "list":
+            results = cmd_list(devices)
+        elif args.command == "check":
+            results = cmd_check(devices)
+        else:
+            results = cmd_update(devices, force=args.force, timeout=args.timeout)
+    except CliError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_ERROR
+    except KeyboardInterrupt:
+        print(
+            "Abgebrochen. Achtung: ein bereits gestarteter OTA-Flash läuft auf dem "
+            "Gerät weiter und wurde nicht zurückgenommen.",
+            file=sys.stderr,
+        )
+        return EXIT_ERROR
+
+    summary = summarize(results, args.command)
+    code = exit_code_for(args.command, summary)
+    if args.json:
+        print(render_json(args.command, devices_file, results, summary, code))
+    else:
+        print(render_human(args.command, results, summary))
+    return code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

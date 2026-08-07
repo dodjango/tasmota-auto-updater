@@ -63,6 +63,9 @@ test = [
     "hypothesis>=6.82.0",
 ]
 
+[project.scripts]
+tasmota-updater = "app.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/arendst/tasmota"
 Repository = "https://github.com/arendst/tasmota"

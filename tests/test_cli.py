@@ -489,3 +489,77 @@ def test_cmd_update_force_does_not_flash_a_device_with_unknown_comparison(monkey
 
     assert len(passes) == 1, "a device with an unknown comparison must never be flashed"
     assert results == [_result(ip="1", latest_version="Unknown")]
+
+
+def test_main_writes_only_json_to_stdout_at_debug_level(monkeypatch, capsys, tmp_path):
+    devices_file = tmp_path / "devices.yaml"
+    devices_file.write_text("devices:\n  - ip: 192.168.8.191\n", encoding="utf-8")
+    monkeypatch.setattr(cli, "cmd_check", lambda devices: [_result()])
+
+    code = cli.main(["check", "-f", str(devices_file), "--json", "--log-level", "DEBUG"])
+
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_OK
+    assert json.loads(captured.out)["command"] == "check"
+
+
+def test_main_reports_missing_devices_file(monkeypatch, capsys, tmp_path):
+    code = cli.main(["check", "-f", str(tmp_path / "nope.yaml")])
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_ERROR
+    assert captured.out == ""
+    assert "nope.yaml" in captured.err
+
+
+def test_main_reports_empty_device_list(monkeypatch, capsys, tmp_path):
+    devices_file = tmp_path / "devices.yaml"
+    devices_file.write_text("devices: []\n", encoding="utf-8")
+    code = cli.main(["check", "-f", str(devices_file)])
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_ERROR
+    assert "No devices" in captured.err
+
+
+def test_main_rejects_duplicate_ips_before_touching_any_device(monkeypatch, capsys, tmp_path):
+    devices_file = tmp_path / "devices.yaml"
+    devices_file.write_text(
+        "devices:\n  - ip: 192.168.8.191\n  - ip: 192.168.8.191\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        cli, "cmd_update", lambda *a, **k: pytest.fail("must not be called")
+    )
+
+    code = cli.main(["update", "-f", str(devices_file)])
+    captured = capsys.readouterr()
+
+    assert code == cli.EXIT_ERROR
+    assert captured.out == ""
+    assert "192.168.8.191" in captured.err
+
+
+def test_main_turns_cli_errors_into_exit_two(monkeypatch, capsys, tmp_path):
+    devices_file = tmp_path / "devices.yaml"
+    devices_file.write_text("devices:\n  - ip: 1\n", encoding="utf-8")
+
+    def explode(devices):
+        raise cli.CliError("runner said no")
+
+    monkeypatch.setattr(cli, "cmd_check", explode)
+    code = cli.main(["check", "-f", str(devices_file)])
+    assert code == cli.EXIT_ERROR
+    assert "runner said no" in capsys.readouterr().err
+
+
+def test_main_handles_interrupt_and_warns_about_the_running_flash(monkeypatch, capsys, tmp_path):
+    devices_file = tmp_path / "devices.yaml"
+    devices_file.write_text("devices:\n  - ip: 1\n", encoding="utf-8")
+
+    def interrupt(devices, *, force, timeout):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "cmd_update", interrupt)
+    code = cli.main(["update", "-f", str(devices_file)])
+    err = capsys.readouterr().err
+    assert code == cli.EXIT_ERROR
+    assert "weiter" in err  # the flash keeps running on the device
