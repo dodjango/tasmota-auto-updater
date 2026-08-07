@@ -74,3 +74,69 @@ def test_editor_persists_a_new_device(page, editable_app):
     written = yaml.safe_load(devices_file.read_text(encoding="utf-8"))["devices"]
     assert any(device["ip"] == "192.168.100.199" for device in written)
     assert any(device.get("fake") for device in written), "fake devices survived the write"
+
+
+def _row_for_ip(page, ip_field_title, ip):
+    """The table has no stable per-row id — find the <tr> by its IP input's
+    current value instead of relying on row order, which changing state can
+    shuffle.
+    """
+    inputs = page.get_by_title(ip_field_title)
+    for index in range(inputs.count()):
+        candidate = inputs.nth(index)
+        if candidate.input_value() == ip:
+            return candidate.locator("xpath=ancestor::tr[1]")
+    raise AssertionError(f"no row found for ip {ip!r}")
+
+
+def test_editor_round_trip_add_edit_reload_delete(page, editable_app):
+    """Add a device, save, reload, confirm it survived, edit its name, save,
+    delete it, save, reload, confirm it is gone — the round trip the design
+    asked for, beyond the single add-and-save the other test covers.
+    """
+    base_url, devices_file = editable_app
+    ip_field_title = (
+        "Enter the device's IP address — changing it makes this a new device, "
+        "so its stored password is not carried over"
+    )
+    name_field_title = "Enter a display name for the device"
+    save_title = "Write the changed device list to the configuration file"
+
+    page.goto(base_url)
+    page.get_by_title("Add a new device to the list").click()
+    page.get_by_title(ip_field_title).last.fill("192.168.100.222")
+    page.get_by_title(save_title).click()
+    page.get_by_text("Saved.").wait_for(state="visible", timeout=10000)
+
+    written = yaml.safe_load(devices_file.read_text(encoding="utf-8"))["devices"]
+    assert any(device["ip"] == "192.168.100.222" for device in written)
+
+    page.reload()
+    page.get_by_title(save_title).wait_for(state="visible", timeout=10000)
+    row = _row_for_ip(page, ip_field_title, "192.168.100.222")
+    row.get_by_title(name_field_title).fill("Round Trip Device")
+    page.get_by_title(save_title).click()
+    page.get_by_text("Saved.").wait_for(state="visible", timeout=10000)
+
+    written = yaml.safe_load(devices_file.read_text(encoding="utf-8"))["devices"]
+    edited = next(device for device in written if device["ip"] == "192.168.100.222")
+    assert edited["dns_name"] == "Round Trip Device"
+
+    page.reload()
+    page.get_by_title(save_title).wait_for(state="visible", timeout=10000)
+    row = _row_for_ip(page, ip_field_title, "192.168.100.222")
+    page.once("dialog", lambda dialog: dialog.accept())  # removeDevice()'s confirm()
+    row.get_by_title(
+        "Remove the device from the configuration — applied when you save"
+    ).click()
+    page.get_by_title(save_title).click()
+    page.get_by_text("Saved.").wait_for(state="visible", timeout=10000)
+
+    written = yaml.safe_load(devices_file.read_text(encoding="utf-8"))["devices"]
+    assert not any(device["ip"] == "192.168.100.222" for device in written)
+
+    page.reload()
+    page.get_by_title(save_title).wait_for(state="visible", timeout=10000)
+    written = yaml.safe_load(devices_file.read_text(encoding="utf-8"))["devices"]
+    assert not any(device["ip"] == "192.168.100.222" for device in written)
+    assert any(device.get("fake") for device in written), "fake devices survived the round trip"
