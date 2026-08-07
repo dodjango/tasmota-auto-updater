@@ -1,5 +1,6 @@
 """Validation and API behaviour for the device-configuration editor."""
 import pytest
+import yaml
 
 from app.tasmota import api
 
@@ -53,11 +54,8 @@ def test_validate_device_list_accepts_distinct_devices():
     assert api.validate_device_list([{"ip": "192.168.8.191"}, {"ip": "192.168.8.192"}]) == []
 
 
-from pathlib import Path
-
-
 @pytest.fixture
-def config_app(tmp_path, monkeypatch):
+def config_app(tmp_path):
     """A Flask test client whose devices file lives in a writable tmp dir."""
     devices_file = tmp_path / "devices.yaml"
     devices_file.write_text(
@@ -105,9 +103,6 @@ def test_get_config_reports_writability_and_path(config_app):
     payload = client.get("/api/config/devices").get_json()
     assert payload["writable"] is True
     assert payload["devices_file"] == str(devices_file)
-
-
-import yaml
 
 
 def test_put_writes_the_merged_list(config_app):
@@ -167,3 +162,42 @@ def test_put_never_echoes_a_password(config_app):
         {"ip": "192.168.8.191", "password": "brandnew"},
     ]}).get_json()
     assert "brandnew" not in str(payload)
+
+
+def test_put_refuses_to_merge_over_unparsable_yaml(config_app):
+    client, devices_file = config_app
+    devices_file.write_text("devices:\n  - ip: [unterminated\n", encoding="utf-8")
+    before = devices_file.read_text(encoding="utf-8")
+
+    response = client.put("/api/config/devices", json={"devices": [
+        {"ip": "192.168.8.191"},
+    ]})
+
+    assert response.status_code == 409
+    assert devices_file.read_text(encoding="utf-8") == before, "nothing is written on error"
+
+
+def test_put_accepts_an_empty_device_list_on_disk(config_app):
+    client, devices_file = config_app
+    devices_file.write_text("devices: []\n", encoding="utf-8")
+
+    response = client.put("/api/config/devices", json={"devices": [
+        {"ip": "192.168.8.191"},
+    ]})
+
+    assert response.status_code == 200
+    written = yaml.safe_load(devices_file.read_text(encoding="utf-8"))["devices"]
+    assert written == [{"ip": "192.168.8.191"}]
+
+
+def test_put_accepts_a_missing_devices_file(config_app):
+    client, devices_file = config_app
+    devices_file.unlink()
+
+    response = client.put("/api/config/devices", json={"devices": [
+        {"ip": "192.168.8.191"},
+    ]})
+
+    assert response.status_code == 200
+    written = yaml.safe_load(devices_file.read_text(encoding="utf-8"))["devices"]
+    assert written == [{"ip": "192.168.8.191"}]

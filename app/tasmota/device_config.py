@@ -19,7 +19,33 @@ class ConfigWriteError(Exception):
     """The device configuration could not be written."""
 
 
+class ConfigReadError(Exception):
+    """The device configuration exists but could not be understood."""
+
+
 MANAGED_FIELDS: tuple[str, ...] = ("ip", "username", "password", "dns_name", "timeout")
+
+
+def read_devices(target: Path) -> list[dict[str, Any]]:
+    """Read the configuration for the write path.
+
+    Unlike ``utils.load_devices_from_file()``, which answers every failure
+    with an empty list, this raises. An empty answer here means the file
+    really is empty — never that it could not be parsed. The merge baseline
+    must not be silently empty: that would drop every stored password and
+    fake-device fixture on the next write.
+    """
+    if not target.exists():
+        return []
+    try:
+        raw = yaml.safe_load(target.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise ConfigReadError(f"{target} is not valid YAML: {exc}") from exc
+    if raw is None:
+        return []
+    if not isinstance(raw, dict) or not isinstance(raw.get("devices", []), list):
+        raise ConfigReadError(f"{target} does not contain a 'devices' list")
+    return list(raw.get("devices") or [])
 
 
 def merge_devices(

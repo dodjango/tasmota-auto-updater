@@ -27,6 +27,49 @@ def test_is_writable_rejects_an_unwritable_directory(tmp_path):
         tmp_path.chmod(0o700)
 
 
+def test_read_devices_returns_empty_for_a_missing_file(tmp_path):
+    assert device_config.read_devices(tmp_path / "devices.yaml") == []
+
+
+def test_read_devices_returns_empty_for_an_empty_file(tmp_path):
+    target = tmp_path / "devices.yaml"
+    target.write_text("", encoding="utf-8")
+    assert device_config.read_devices(target) == []
+
+
+def test_read_devices_returns_empty_for_an_empty_device_list(tmp_path):
+    target = tmp_path / "devices.yaml"
+    target.write_text("devices: []\n", encoding="utf-8")
+    assert device_config.read_devices(target) == []
+
+
+def test_read_devices_returns_the_configured_devices(tmp_path):
+    target = tmp_path / "devices.yaml"
+    target.write_text("devices:\n- ip: 192.168.8.191\n", encoding="utf-8")
+    assert device_config.read_devices(target) == [{"ip": "192.168.8.191"}]
+
+
+def test_read_devices_raises_on_invalid_yaml(tmp_path):
+    target = tmp_path / "devices.yaml"
+    target.write_text("devices:\n  - ip: [unterminated\n", encoding="utf-8")
+    with pytest.raises(device_config.ConfigReadError):
+        device_config.read_devices(target)
+
+
+def test_read_devices_raises_when_devices_is_not_a_list(tmp_path):
+    target = tmp_path / "devices.yaml"
+    target.write_text("devices: not-a-list\n", encoding="utf-8")
+    with pytest.raises(device_config.ConfigReadError):
+        device_config.read_devices(target)
+
+
+def test_read_devices_raises_when_the_document_is_not_a_mapping(tmp_path):
+    target = tmp_path / "devices.yaml"
+    target.write_text("- just\n- a\n- list\n", encoding="utf-8")
+    with pytest.raises(device_config.ConfigReadError):
+        device_config.read_devices(target)
+
+
 def test_write_devices_replaces_the_file(tmp_path):
     target = tmp_path / "devices.yaml"
     target.write_text("devices:\n- ip: 1.1.1.1\n", encoding="utf-8")

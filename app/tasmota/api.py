@@ -158,7 +158,10 @@ class DeviceConfigResource(Resource):
             return {'error': 'Bad Request', 'details': '; '.join(list_errors)}, 400
 
         devices_file = Path(current_app.config.get('DEVICES_FILE', 'devices.yaml'))
-        existing = load_devices_from_file(str(devices_file))
+        try:
+            existing = device_config.read_devices(devices_file)
+        except device_config.ConfigReadError as exc:
+            return {'error': 'Conflict', 'details': str(exc)}, 409
         merged = device_config.merge_devices(existing, cleaned)
 
         try:
