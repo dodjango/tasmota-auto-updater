@@ -127,7 +127,7 @@ def write_devices(target: Path, devices: list[dict[str, Any]]) -> None:
             os.fsync(handle.fileno())
         if target.exists():
             shutil.copy2(target, target.with_suffix(target.suffix + ".bak"))
-        os.replace(temp_path, target)
+        temp_path.replace(target)
     except OSError as exc:
         temp_path.unlink(missing_ok=True)
         raise ConfigWriteError(f"Could not write {target}: {exc}") from exc

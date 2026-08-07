@@ -112,10 +112,10 @@ def test_write_devices_cleans_up_on_replace_failure(tmp_path, monkeypatch):
     original_content = "devices:\n- ip: 1.1.1.1\n"
     target.write_text(original_content, encoding="utf-8")
 
-    def failing_replace(src, dst):
+    def failing_replace(self, target):
         raise OSError("Mock replace failure")
 
-    monkeypatch.setattr(device_config.os, "replace", failing_replace)
+    monkeypatch.setattr(Path, "replace", failing_replace)
 
     with pytest.raises(device_config.ConfigWriteError):
         device_config.write_devices(target, [{"ip": "2.2.2.2"}])
