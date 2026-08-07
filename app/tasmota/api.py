@@ -119,6 +119,56 @@ class DeviceConfigResource(Resource):
             "devices_file": str(devices_file),
         })
 
+    def put(self):
+        """
+        Replace the device configuration
+        ---
+        tags:
+          - configuration
+        responses:
+          200:
+            description: The stored configuration after the write
+          400:
+            description: Validation failed
+          409:
+            description: The configuration file is not writable
+          415:
+            description: Body was not JSON
+        """
+        if not request.is_json:
+            return {'error': 'Unsupported Media Type',
+                    'details': 'Content-Type must be application/json'}, 415
+
+        body = request.get_json(silent=True) or {}
+        submitted = body.get('devices')
+        if not isinstance(submitted, list):
+            return {'error': 'Bad Request', 'details': "'devices' must be a list"}, 400
+
+        schema = DeviceConfigSchema()
+        cleaned = []
+        for index, entry in enumerate(submitted):
+            try:
+                cleaned.append(schema.load(entry))
+            except ValidationError as exc:
+                return {'error': 'Bad Request',
+                        'details': f"Device #{index + 1}: {exc.messages}"}, 400
+
+        list_errors = validate_device_list(cleaned)
+        if list_errors:
+            return {'error': 'Bad Request', 'details': '; '.join(list_errors)}, 400
+
+        devices_file = Path(current_app.config.get('DEVICES_FILE', 'devices.yaml'))
+        existing = load_devices_from_file(str(devices_file))
+        merged = device_config.merge_devices(existing, cleaned)
+
+        try:
+            device_config.write_devices(devices_file, merged)
+        except device_config.ConfigWriteError as exc:
+            return {'error': 'Conflict', 'details': str(exc)}, 409
+
+        current_app.logger.info("Device configuration updated: %d device(s)", len(merged))
+        return self.get()
+
 
 # API Resources
 class DeviceListResource(Resource):

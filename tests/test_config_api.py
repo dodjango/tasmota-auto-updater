@@ -105,3 +105,65 @@ def test_get_config_reports_writability_and_path(config_app):
     payload = client.get("/api/config/devices").get_json()
     assert payload["writable"] is True
     assert payload["devices_file"] == str(devices_file)
+
+
+import yaml
+
+
+def test_put_writes_the_merged_list(config_app):
+    client, devices_file = config_app
+    response = client.put("/api/config/devices", json={"devices": [
+        {"ip": "192.168.8.191", "username": "admin", "dns_name": "flur"},
+    ]})
+    assert response.status_code == 200
+
+    written = yaml.safe_load(devices_file.read_text(encoding="utf-8"))["devices"]
+    assert written == [{
+        "ip": "192.168.8.191", "username": "admin", "dns_name": "flur",
+        "password": "secret", "fake": True,
+    }], "password and fake survive; the second device was deleted"
+
+
+def test_put_rejects_a_non_json_body(config_app):
+    client, _ = config_app
+    assert client.put("/api/config/devices", data="devices: []").status_code == 415
+
+
+def test_put_rejects_an_invalid_device(config_app):
+    client, devices_file = config_app
+    before = devices_file.read_text(encoding="utf-8")
+    response = client.put("/api/config/devices", json={"devices": [{"ip": "127.0.0.1"}]})
+    assert response.status_code == 400
+    assert devices_file.read_text(encoding="utf-8") == before, "nothing is written on error"
+
+
+def test_put_rejects_duplicate_ips(config_app):
+    client, _ = config_app
+    response = client.put("/api/config/devices", json={"devices": [
+        {"ip": "192.168.8.191"}, {"ip": "192.168.8.191"},
+    ]})
+    assert response.status_code == 400
+
+
+def test_put_rejects_unknown_fields(config_app):
+    client, _ = config_app
+    response = client.put("/api/config/devices", json={"devices": [
+        {"ip": "192.168.8.191", "fake": True},
+    ]})
+    assert response.status_code == 400
+
+
+def test_put_reports_an_unwritable_target(config_app, monkeypatch):
+    client, _ = config_app
+    monkeypatch.setattr(api.device_config, "is_writable", lambda target: False)
+    response = client.put("/api/config/devices", json={"devices": [{"ip": "192.168.8.191"}]})
+    assert response.status_code == 409
+    assert "mount" in response.get_json()["details"].lower()
+
+
+def test_put_never_echoes_a_password(config_app):
+    client, _ = config_app
+    payload = client.put("/api/config/devices", json={"devices": [
+        {"ip": "192.168.8.191", "password": "brandnew"},
+    ]}).get_json()
+    assert "brandnew" not in str(payload)
