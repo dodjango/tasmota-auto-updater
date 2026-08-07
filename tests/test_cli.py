@@ -52,3 +52,92 @@ def test_resolve_devices_file_falls_back_to_environment():
 
 def test_resolve_devices_file_defaults_to_devices_yaml():
     assert cli.resolve_devices_file(None, {}) == "devices.yaml"
+
+
+def _result(**overrides):
+    base = {
+        "ip": "192.168.8.191",
+        "success": True,
+        "current_version": "14.6.0",
+        "latest_version": "15.0.1",
+        "needs_update": False,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_classify_failed_device():
+    assert cli.classify(_result(success=False)) == "failed"
+
+
+@pytest.mark.parametrize("latest", ["Unknown", "", None])
+def test_classify_unknown_comparison(latest):
+    assert cli.classify(_result(latest_version=latest)) == "comparison_unknown"
+
+
+def test_classify_missing_latest_version_is_unknown():
+    result = _result()
+    del result["latest_version"]
+    assert cli.classify(result) == "comparison_unknown"
+
+
+def test_classify_needs_update():
+    assert cli.classify(_result(needs_update=True)) == "needs_update"
+
+
+def test_classify_up_to_date():
+    assert cli.classify(_result()) == "up_to_date"
+
+
+def test_classify_failure_wins_over_unknown():
+    assert cli.classify(_result(success=False, latest_version="Unknown")) == "failed"
+
+
+def test_summarize_check_counts_every_class():
+    results = [
+        _result(ip="1", needs_update=True),
+        _result(ip="2"),
+        _result(ip="3", latest_version="Unknown"),
+        _result(ip="4", success=False),
+    ]
+    assert cli.summarize(results, "check") == {
+        "total": 4,
+        "up_to_date": 1,
+        "needs_update": 1,
+        "comparison_unknown": 1,
+        "failed": 1,
+    }
+
+
+def test_summarize_list_only_counts_failures():
+    results = [_result(ip="1"), _result(ip="2", success=False)]
+    assert cli.summarize(results, "list") == {"total": 2, "failed": 1}
+
+
+def test_summarize_update_counts_updated_and_skipped():
+    results = [
+        _result(ip="1", needs_update=True, update_completed=True),
+        _result(ip="2"),
+        _result(ip="3", success=False, update_started=True),
+        _result(ip="4", latest_version="Unknown"),
+    ]
+    assert cli.summarize(results, "update") == {
+        "total": 4,
+        "updated": 1,
+        "skipped": 1,
+        "comparison_unknown": 1,
+        "failed": 1,
+    }
+
+
+def test_summarize_update_does_not_count_an_updated_device_as_skipped():
+    """After a successful update the device reports the new version, so it
+    classifies as up_to_date — it must not land in both buckets."""
+    results = [_result(ip="1", needs_update=False, update_completed=True)]
+    assert cli.summarize(results, "update") == {
+        "total": 1,
+        "updated": 1,
+        "skipped": 0,
+        "comparison_unknown": 0,
+        "failed": 0,
+    }
