@@ -5,7 +5,6 @@ writes it. It deliberately holds no HTTP or update logic.
 """
 from __future__ import annotations
 
-import logging
 import os
 import shutil
 import tempfile
@@ -13,8 +12,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-
-logger = logging.getLogger(__name__)
 
 
 class ConfigWriteError(Exception):
