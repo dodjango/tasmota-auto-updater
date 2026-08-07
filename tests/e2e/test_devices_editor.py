@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from playwright.sync_api import expect
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -70,6 +71,7 @@ def test_editor_persists_a_new_device(page, editable_app):
     page.get_by_title("Write the changed device list to the configuration file").click()
 
     page.get_by_text("Saved.").wait_for(state="visible", timeout=10000)
+    expect(page.get_by_test_id("editor-error")).not_to_be_visible()
 
     written = yaml.safe_load(devices_file.read_text(encoding="utf-8"))["devices"]
     assert any(device["ip"] == "192.168.100.199" for device in written)
