@@ -57,6 +57,5 @@ compose.yml
 # Flask stuff:
 instance/
 .webassets-cache
-
-# Superpowers SDD scratch workspace
+# Superpowers SDD scratch workspace (ledger, briefs, review packages)
 .superpowers/

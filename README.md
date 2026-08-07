@@ -12,14 +12,11 @@ Tasmota Remote Updater is a tool that automatically updates multiple Tasmota dev
 
 ## ✨ Features
 
-**Two supported interfaces in one tool:**
+**Three supported interfaces in one tool:**
 
 - **Web Interface**: Modern dashboard with one-click updates and real-time monitoring
 - **RESTful API**: Programmatic access with Swagger documentation
-
-The **command-line interface is deprecated** and no longer works — running
-`tasmota_updater.py` only prints a notice and exits. Use the REST API for
-scripting; see [Command-Line Usage](docs/cli-usage.md) for migration notes.
+- **Command-Line Interface**: A thin `python -m app.cli` wrapper for cron jobs and scripting — see [Command-Line Usage](docs/cli-usage.md)
 
 ## 🚀 Quick Start
 
@@ -93,7 +90,7 @@ Then visit http://localhost:5001 in your browser.
 ## 📚 Documentation
 
 - [Installation Guide](docs/installation.md)
-- [Command-Line Usage](docs/cli-usage.md) *(deprecated)*
+- [Command-Line Usage](docs/cli-usage.md)
 - [Web Interface Guide](docs/web-interface.md)
 - [API Documentation](docs/api.md)
 - [Configuration Options](docs/configuration.md)

@@ -1,4 +1,5 @@
-"""The CLI is deprecated (Phase 4): it must only print a notice and exit non-zero."""
+"""The old CLI is retired (Phase 4): it must only print a notice pointing at the
+new one and exit non-zero."""
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +16,6 @@ def test_cli_prints_deprecation_and_exits_nonzero():
         timeout=30,
     )
     assert result.returncode == 1
-    assert "deprecated" in result.stderr.lower()
+    assert "python -m app.cli" in result.stderr
     # It must not fall through into the old (broken) logic.
     assert "Traceback" not in result.stderr
