@@ -240,3 +240,27 @@ def test_render_json_passes_core_fields_through_unchanged():
     results = [_result(message="anything the core said")]
     payload = json.loads(cli.render_json("check", "d.yaml", results, {}, cli.EXIT_OK))
     assert payload["results"][0]["message"] == "anything the core said"
+
+
+def test_render_human_list_no_comparison_wording():
+    """list performs no release lookup, so comparison labels must not appear."""
+    results = [
+        {
+            "ip": "192.168.8.191",
+            "dns_name": "flur",
+            "success": True,
+            "current_version": "15.0.1",
+        }
+    ]
+    text = cli.render_human("list", results, cli.summarize(results, "list"))
+    assert "Vergleich unbekannt" not in text
+    assert "aktuell" not in text
+    assert "15.0.1" in text
+    assert "192.168.8.191" in text
+
+
+def test_render_human_list_marks_unreachable():
+    """list marks unreachable devices with nicht erreichbar."""
+    results = [{"ip": "192.168.8.192", "success": False, "current_version": "14.0.0"}]
+    text = cli.render_human("list", results, cli.summarize(results, "list"))
+    assert "nicht erreichbar" in text

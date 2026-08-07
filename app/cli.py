@@ -143,6 +143,11 @@ _CHECK_LABELS = {
 }
 
 
+def _list_label(result: Mapping[str, Any]) -> str:
+    """`list` performs no release lookup, so no comparison wording applies."""
+    return "" if result.get("success") else "nicht erreichbar"
+
+
 def _update_label(result: Mapping[str, Any]) -> str:
     """Label for an update run. A just-updated device still carries
     ``needs_update`` from its pre-update comparison, so the class alone lies."""
@@ -192,11 +197,17 @@ def render_human(
     """One line per device plus a closing tally, sized for a cron mail."""
     lines = []
     for result in results:
-        label = _update_label(result) if command == "update" else _CHECK_LABELS[classify(result)]
+        if command == "update":
+            label = _update_label(result)
+        elif command == "list":
+            label = _list_label(result)
+        else:
+            label = _CHECK_LABELS[classify(result)]
         name = str(result.get("dns_name") or "")
-        lines.append(
+        line = (
             f"{str(result.get('ip', '?')):<16}{name:<16}{_version_column(result):<20}{label}"
         )
+        lines.append(line.rstrip())
     lines.append(_tally_line(command, summary))
     return "\n".join(lines)
 
