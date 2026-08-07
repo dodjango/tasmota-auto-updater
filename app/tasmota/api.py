@@ -1,9 +1,10 @@
 """API endpoints for the Tasmota updater web application"""
 
 import os
+from typing import Any
 from flask import request, jsonify, current_app
 from flask_restful import Api, Resource
-from marshmallow import Schema, fields, validate
+from marshmallow import Schema, ValidationError, fields, validate
 from flasgger import swag_from
 from app.tasmota.updater import (
     get_device_firmware_version,
@@ -36,6 +37,47 @@ class DeviceUpdateSchema(Schema):
 
     class Meta:
         fields = ("ip", "username", "password", "check_only", "timeout")
+
+
+def _validate_device_ip(value: str) -> None:
+    """Reject anything is_valid_ip_address() rejects.
+
+    That function deliberately blocks loopback, link-local and the cloud
+    metadata address — the same block that keeps the update endpoints from
+    being turned into an SSRF primitive. The editor must not be a way around it.
+    """
+    if not is_valid_ip_address(value):
+        raise ValidationError(f"Not a usable device address: {value!r}")
+
+
+class DeviceConfigSchema(Schema):
+    """One device as the editor may submit it.
+
+    ``unknown = "raise"`` is a security property, not a convenience: it is
+    what keeps ``fake`` and ``firmware_info`` unsettable through the editor.
+    """
+
+    ip = fields.String(required=True, validate=_validate_device_ip)
+    username = fields.String()
+    password = fields.String()
+    dns_name = fields.String()
+    timeout = fields.Integer(validate=validate.Range(min=60, max=600))
+    remove_password = fields.Boolean()
+
+    class Meta:
+        unknown = "raise"
+
+
+def validate_device_list(devices: list[dict[str, Any]]) -> list[str]:
+    """List-level checks that a per-device schema cannot express."""
+    errors: list[str] = []
+    seen: set[Any] = set()
+    for device in devices:
+        ip = device.get("ip")
+        if ip in seen:
+            errors.append(f"Duplicate device address: {ip}")
+        seen.add(ip)
+    return errors
 
 
 # API Resources
