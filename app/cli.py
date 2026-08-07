@@ -270,6 +270,44 @@ def cmd_check(devices: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     return run_batch(devices, check_only=True, timeout=None)
 
 
+def cmd_update(
+    devices: Sequence[Mapping[str, Any]],
+    *,
+    force: bool,
+    timeout: int | None,
+) -> list[dict[str, Any]]:
+    """Update outdated devices in two passes: classify, then flash the subset.
+
+    The runner's own ``update_only_needed`` filter is not used: it drops
+    skipped devices from the results, which would make a failed release lookup
+    indistinguishable from "everything current".
+    """
+    checked = run_batch(devices, check_only=True, timeout=None)
+    # With --force, up-to-date devices are flashed too — but never a device we
+    # could not classify: flashing blind is worse than doing nothing.
+    wanted = ("needs_update", "up_to_date") if force else ("needs_update",)
+    selected_ips = [result["ip"] for result in checked if classify(result) in wanted]
+    if not selected_ips:
+        return checked
+
+    by_ip = {device.get("ip"): device for device in devices}
+    subset = [by_ip[ip] for ip in selected_ips if ip in by_ip]
+    updated = {
+        result.get("ip"): result
+        for result in run_batch(subset, check_only=False, timeout=timeout)
+    }
+    # Every selected device must come back with a pass-two result. Silently
+    # falling back to its pass-one entry would leave it carrying a stale
+    # needs_update flag while landing in none of the tally's buckets — the
+    # totals stop adding up and a device that needed flashing looks untouched.
+    missing = [ip for ip in selected_ips if ip not in updated]
+    if missing:
+        raise CliError(
+            "The update pass returned no result for: " + ", ".join(str(ip) for ip in missing)
+        )
+    return [updated.get(result["ip"], result) for result in checked]
+
+
 def cmd_list(devices: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Inventory: what is configured and what firmware runs on it.
 

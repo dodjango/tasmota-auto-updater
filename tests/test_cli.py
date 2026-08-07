@@ -354,3 +354,98 @@ def test_run_batch_raises_on_runner_error(monkeypatch):
     )
     with pytest.raises(cli.CliError, match="boom"):
         cli.run_batch([{"ip": "1"}], check_only=True, timeout=None)
+
+
+def test_cmd_update_only_touches_outdated_devices(monkeypatch):
+    passes = []
+
+    def fake_run_batch(devices, *, check_only, timeout):
+        passes.append({"ips": [d["ip"] for d in devices], "check_only": check_only})
+        if check_only:
+            return [
+                _result(ip="1", needs_update=True),
+                _result(ip="2"),
+            ]
+        return [_result(ip="1", needs_update=True, update_completed=True, success=True)]
+
+    monkeypatch.setattr(cli, "run_batch", fake_run_batch)
+
+    results = cli.cmd_update([{"ip": "1"}, {"ip": "2"}], force=False, timeout=None)
+
+    assert passes[0] == {"ips": ["1", "2"], "check_only": True}
+    assert passes[1] == {"ips": ["1"], "check_only": False}
+    by_ip = {r["ip"]: r for r in results}
+    assert by_ip["1"]["update_completed"] is True
+    assert by_ip["2"].get("update_completed") is None
+    assert len(results) == 2
+
+
+def test_cmd_update_skips_the_second_pass_when_nothing_is_outdated(monkeypatch):
+    passes = []
+
+    def fake_run_batch(devices, *, check_only, timeout):
+        passes.append(check_only)
+        return [_result(ip="1")]
+
+    monkeypatch.setattr(cli, "run_batch", fake_run_batch)
+    results = cli.cmd_update([{"ip": "1"}], force=False, timeout=None)
+
+    assert passes == [True]
+    assert results == [_result(ip="1")]
+
+
+def test_cmd_update_does_not_flash_on_unknown_comparison(monkeypatch):
+    passes = []
+
+    def fake_run_batch(devices, *, check_only, timeout):
+        passes.append(check_only)
+        return [_result(ip="1", latest_version="Unknown")]
+
+    monkeypatch.setattr(cli, "run_batch", fake_run_batch)
+    results = cli.cmd_update([{"ip": "1"}], force=False, timeout=None)
+
+    assert passes == [True], "an unknown comparison must not trigger a flash"
+    assert cli.classify(results[0]) == "comparison_unknown"
+
+
+def test_cmd_update_force_updates_every_reachable_device(monkeypatch):
+    passes = []
+
+    def fake_run_batch(devices, *, check_only, timeout):
+        passes.append({"ips": [d["ip"] for d in devices], "check_only": check_only})
+        if check_only:
+            return [_result(ip="1"), _result(ip="2", success=False)]
+        return [_result(ip="1", update_completed=True)]
+
+    monkeypatch.setattr(cli, "run_batch", fake_run_batch)
+    cli.cmd_update([{"ip": "1"}, {"ip": "2"}], force=True, timeout=None)
+
+    assert passes[1] == {"ips": ["1"], "check_only": False}, "unreachable devices stay out"
+
+
+def test_cmd_update_passes_the_timeout_to_the_second_pass_only(monkeypatch):
+    seen = []
+
+    def fake_run_batch(devices, *, check_only, timeout):
+        seen.append((check_only, timeout))
+        return [_result(ip="1", needs_update=True)] if check_only else [_result(ip="1")]
+
+    monkeypatch.setattr(cli, "run_batch", fake_run_batch)
+    cli.cmd_update([{"ip": "1"}], force=False, timeout=300)
+
+    assert seen == [(True, None), (False, 300)]
+
+
+def test_cmd_update_raises_when_the_flash_pass_drops_a_selected_device(monkeypatch):
+    def fake_run_batch(devices, *, check_only, timeout):
+        if check_only:
+            return [
+                _result(ip="1", needs_update=True),
+                _result(ip="2", needs_update=True),
+            ]
+        return [_result(ip="1", needs_update=True, update_completed=True, success=True)]
+
+    monkeypatch.setattr(cli, "run_batch", fake_run_batch)
+
+    with pytest.raises(cli.CliError, match="2"):
+        cli.cmd_update([{"ip": "1"}, {"ip": "2"}], force=False, timeout=None)
