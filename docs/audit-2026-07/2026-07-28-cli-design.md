@@ -112,36 +112,72 @@ Menschenlesbar (Default), eine Zeile pro Gerät plus Bilanz:
 ```
 
 Mit `--json` ein Objekt, das die Ergebnis-Dicts des Kerns unverändert
-durchreicht:
+durchreicht — `json.dumps(..., sort_keys=True)`, die Schlüssel sind also
+alphabetisch sortiert, und jedes Ergebnis trägt alle Felder, die der Kern
+liefert (nicht nur die für den Vergleich relevanten). Echter, unveränderter
+Lauf gegen zwei Geräte (eines per Fake-Firmware, eines mit ungültiger IP, um
+einen echten Fehlerfall zu zeigen):
 
 ```json
 {
   "command": "check",
-  "devices_file": "devices.yaml",
+  "devices_file": "devices-doc-example.yaml",
+  "exit_code": 2,
   "results": [
     {
-      "ip": "192.168.8.191",
-      "success": true,
-      "current_version": "14.6.0",
-      "latest_version": "15.0.1",
+      "current_version": "12.0.2",
+      "dns_name": "fake-tasmota-light1.local",
+      "ip": "192.168.100.101",
+      "latest_version": "15.5.0",
+      "message": "Update available",
       "needs_update": true,
-      "message": "..."
+      "success": true,
+      "timeout_config": {
+        "initial_wait": 10,
+        "max_check_interval": 30.0,
+        "min_check_interval": 2.0,
+        "total_timeout": 240
+      },
+      "timeout_report": null,
+      "update_completed": false,
+      "update_started": false,
+      "version_verification": null
+    },
+    {
+      "current_version": "Unknown",
+      "dns_name": "localhost",
+      "ip": "127.0.0.1",
+      "latest_version": "Unknown",
+      "message": "Failed to get current firmware version",
+      "needs_update": false,
+      "success": false,
+      "timeout_config": {
+        "initial_wait": 10,
+        "max_check_interval": 30.0,
+        "min_check_interval": 2.0,
+        "total_timeout": 240
+      },
+      "timeout_report": null,
+      "update_completed": false,
+      "update_started": false,
+      "version_verification": null
     }
   ],
   "summary": {
-    "total": 4,
-    "up_to_date": 1,
+    "comparison_unknown": 0,
+    "failed": 1,
     "needs_update": 1,
-    "comparison_unknown": 1,
-    "failed": 1
-  },
-  "exit_code": 2
+    "total": 2,
+    "up_to_date": 0
+  }
 }
 ```
 
-`results` ist gekürzt; die Bilanz beschreibt alle vier Geräte des Beispiels
-oben. Der `exit_code` ist hier **2** und nicht 1, weil ein Fehler und ein
-unbekannter Vergleich das „veraltet" überstimmen.
+Der `exit_code` ist hier **2** und nicht 1, weil ein Fehler das „veraltet"
+überstimmt — genau die Präzedenz, die unten im Abschnitt Exit-Codes
+beschrieben ist. `comparison_unknown` steht in diesem Lauf auf 0, weil der
+Release-Lookup erfolgreich war; die Zuordnung, wann dieses Feld greift, steht
+in der Tabelle unten.
 
 Bei `list` fehlen in den Ergebnissen die Vergleichsfelder (`latest_version`,
 `needs_update`) und in der Bilanz entsprechend `up_to_date`, `needs_update` und
@@ -166,10 +202,19 @@ nicht zwischen „aktuell" und „nicht vergleichbar". Die Zuordnung:
 |---|---|---|---|
 | **0** | alles aktuell | nichts zu tun oder alle Updates erfolgreich | alle Geräte erreichbar |
 | **1** | mindestens eines veraltet | — | — |
-| **2** | Fehler | mindestens ein Update fehlgeschlagen | mindestens eines unerreichbar |
+| **2** | Fehler | ein Flash fehlgeschlagen, oder ein Gerät war unerreichbar/nicht vergleichbar — auch eines, das `update` gar nicht angefasst hat | mindestens eines unerreichbar |
 
 Bei gemischten Ergebnissen gewinnt der höhere Code: Fehler (2) schlägt
 veraltet (1) schlägt in Ordnung (0). Exit 1 tritt nur bei `check` auf.
+
+Bei `update` heißt Exit 2 also nicht zwingend, dass ein Flash-Versuch
+scheiterte: `update` klassifiziert zuerst alle Geräte und flasht nur die
+ausgewählten (veraltete, oder mit `--force` alle erreichbaren/vergleichbaren).
+Ein nicht erreichbares oder nicht vergleichbares Gerät wird nie geflasht, zählt
+aber trotzdem in `failed`/`comparison_unknown` und hebt den Exit-Code
+weiterhin auf 2 — derselbe Effekt wie bei `check`, nur leichter
+missverständlich, weil man bei `update` zuerst an einen fehlgeschlagenen
+Flash denkt.
 
 Damit reicht für cron ein Einzeiler, ohne `jq`:
 

@@ -218,8 +218,9 @@ def render_human(
             str(result.get("ip", "?")).ljust(15),
             name.ljust(24),
             _version_column(result).ljust(18),
+            label,
         ]
-        lines.append(("  ".join(columns) + label).rstrip())
+        lines.append("  ".join(columns).rstrip())
     lines.append(_tally_line(command, summary))
     return "\n".join(lines)
 

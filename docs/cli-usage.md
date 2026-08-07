@@ -82,45 +82,97 @@ One line per device plus a closing tally:
 ```
 
 (That example is `list` against the fake devices in `devices-dev.yaml` — the
-German tally wording is user-visible output, not a translation gap.) For
-`check`, a device carries one of four labels: `aktuell`, `Update verfügbar`,
-`Vergleich unbekannt`, or `nicht erreichbar`.
+German tally wording is user-visible output, not a translation gap.)
+
+`check` against the same fixture, all four fake devices outdated:
+
+```
+192.168.100.101  fake-tasmota-light1.local  12.0.2 → 15.5.0     Update verfügbar
+192.168.100.102  fake-tasmota-switch1.local  11.1.0 → 15.5.0     Update verfügbar
+192.168.100.103  fake-tasmota-plug1.local  12.0.2(tasmota-minimal) → 15.5.0  Update verfügbar
+192.168.100.104  fake-tasmota-slow-device.local  11.0.0 → 15.5.0     Update verfügbar
+0 aktuell, 4 Update verfügbar, 0 Vergleich unbekannt, 0 Fehler
+```
+
+Note the third line: the version column (`12.0.2(tasmota-minimal) →
+15.5.0`) is wider than its usual padding, and the label still starts two
+spaces after it rather than gluing onto it — the columns are joined with a
+fixed separator, not built from fixed-width padding alone, so an overrunning
+column can never swallow the one after it. A device carries one of four
+labels: `aktuell`, `Update verfügbar`, `Vergleich unbekannt`, or `nicht
+erreichbar`.
 
 ### JSON (`--json`)
 
 The core's own result dicts, unchanged, plus a computed summary and the exit
-code:
+code. `json.dumps(..., sort_keys=True)` sorts keys alphabetically, and every
+result carries all the fields the core returns, not just the ones relevant
+to comparison — the excerpt below is a real, unedited run against two
+devices (one fake, one with a bad IP, to show a real failure) and is not
+representative of every field an update-vs-check run can carry:
 
 ```json
 {
   "command": "check",
-  "devices_file": "devices.yaml",
+  "devices_file": "devices-doc-example.yaml",
+  "exit_code": 2,
   "results": [
     {
-      "ip": "192.168.8.191",
-      "success": true,
-      "current_version": "14.6.0",
-      "latest_version": "15.0.1",
+      "current_version": "12.0.2",
+      "dns_name": "fake-tasmota-light1.local",
+      "ip": "192.168.100.101",
+      "latest_version": "15.5.0",
+      "message": "Update available",
       "needs_update": true,
-      "message": "..."
+      "success": true,
+      "timeout_config": {
+        "initial_wait": 10,
+        "max_check_interval": 30.0,
+        "min_check_interval": 2.0,
+        "total_timeout": 240
+      },
+      "timeout_report": null,
+      "update_completed": false,
+      "update_started": false,
+      "version_verification": null
+    },
+    {
+      "current_version": "Unknown",
+      "dns_name": "localhost",
+      "ip": "127.0.0.1",
+      "latest_version": "Unknown",
+      "message": "Failed to get current firmware version",
+      "needs_update": false,
+      "success": false,
+      "timeout_config": {
+        "initial_wait": 10,
+        "max_check_interval": 30.0,
+        "min_check_interval": 2.0,
+        "total_timeout": 240
+      },
+      "timeout_report": null,
+      "update_completed": false,
+      "update_started": false,
+      "version_verification": null
     }
   ],
   "summary": {
-    "total": 4,
-    "up_to_date": 1,
+    "comparison_unknown": 0,
+    "failed": 1,
     "needs_update": 1,
-    "comparison_unknown": 1,
-    "failed": 1
-  },
-  "exit_code": 2
+    "total": 2,
+    "up_to_date": 0
+  }
 }
 ```
 
-`summary` is computed by the CLI itself from `results`, not taken from the
-job runner's own tally — the runner's summary has no way to express
-"comparison unknown" and does not distinguish "up to date" from "not
-comparable". `list` results omit the comparison fields (`latest_version`,
-`needs_update`); its summary has only `total` and `failed`.
+`exit_code` is **2** here, not 1, because the unreachable device's failure
+beats "outdated" — see Exit Codes below. `summary` is computed by the CLI
+itself from `results`, not taken from the job runner's own tally — the
+runner's summary has no way to express "comparison unknown" and does not
+distinguish "up to date" from "not comparable". `list` results omit the
+comparison fields (`latest_version`, `needs_update`); its summary has only
+`total` and `failed`.
 
 ## Exit Codes
 
@@ -128,10 +180,19 @@ comparable". `list` results omit the comparison fields (`latest_version`,
 |---|---|---|---|
 | **0** | everything up to date | nothing to do, or all updates succeeded | every device reachable |
 | **1** | at least one device outdated | — | — |
-| **2** | error | at least one update failed | at least one device unreachable |
+| **2** | error | at least one flash failed, or a device could not be reached or compared — including one `update` never touched | at least one device unreachable |
 
 On mixed results the higher code wins: error (2) beats outdated (1) beats ok
 (0). Exit code 1 only ever occurs for `check`.
+
+For `update`, exit 2 does not necessarily mean a flash attempt failed:
+`update` classifies every device first and only flashes the ones it selected
+(outdated ones, or — with `--force` — every reachable, comparable one). A
+device it could not reach or could not compare is never flashed at all, but
+it still counts toward `failed`/`comparison_unknown` and still raises the
+exit code to 2. An operator debugging an exit-2 alert should check *which*
+device carries the `nicht erreichbar` or `Vergleich unbekannt` label before
+assuming a flash went wrong — it may be a device `update` never touched.
 
 **The rule that makes the exit codes trustworthy:** `needs_update: false` also
 means "could not compare" — a failed release lookup reports

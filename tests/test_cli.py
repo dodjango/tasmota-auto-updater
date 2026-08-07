@@ -282,6 +282,23 @@ def test_render_human_keeps_columns_apart_when_dns_name_overruns_its_width():
     assert "local11.0.0" not in text
 
 
+def test_render_human_keeps_label_apart_when_version_column_overruns():
+    """A version column wider than its fixed width must not glue itself to the
+    label that follows it (regression: the fix for the dns_name/version gap
+    above did not cover the version/label gap)."""
+    results = [
+        _result(
+            ip="192.168.100.103",
+            dns_name="fake-tasmota-plug1.local",
+            current_version="12.0.2(tasmota-minimal)",
+            needs_update=True,
+        )
+    ]
+    text = cli.render_human("check", results, cli.summarize(results, "check"))
+    assert "12.0.2(tasmota-minimal) → 15.0.1  Update verfügbar" in text
+    assert "15.0.1Update verfügbar" not in text
+
+
 def test_cmd_list_reports_firmware_without_release_lookup(monkeypatch):
     calls = []
 
