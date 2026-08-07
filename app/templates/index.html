@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div x-data="tasmotaApp()" x-init="init()">
+    <div x-data="tasmotaApp()" x-init="init()" @devices-changed.window="refreshDevices()">
         <nav class="navbar is-primary" role="navigation" aria-label="main navigation" x-data="{ navOpen: false }">
             <div class="navbar-brand">
                 <a class="navbar-item" href="/" title="Return to home page">
@@ -214,6 +214,9 @@
               </tr>
             </thead>
             <tbody>
+              <tr x-show="loading" x-cloak>
+                <td colspan="6" class="has-text-centered">Loading…</td>
+              </tr>
               <template x-for="(device, index) in devices" :key="index">
                 <tr>
                   <td><input class="input" type="text" x-model="device.ip"
@@ -263,10 +266,10 @@
           </p>
 
           <div class="buttons">
-            <button class="button" type="button" :disabled="!writable" @click="addDevice()"
+            <button class="button" type="button" :disabled="!writable || !loaded" @click="addDevice()"
                     title="Add a new device to the list">Add Device</button>
             <button class="button is-primary" type="button"
-                    :disabled="!writable || saving" :class="{'is-loading': saving}"
+                    :disabled="!writable || !loaded || saving" :class="{'is-loading': saving}"
                     @click="save()"
                     title="Write the changed device list to the configuration file">
               Save

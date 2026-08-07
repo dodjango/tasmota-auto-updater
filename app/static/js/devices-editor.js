@@ -14,6 +14,15 @@ function devicesEditor() {
         saving: false,
         error: '',
         saved: false,
+        // Only a successful GET may set this true. Save is gated on it so a
+        // failed load (expired session, proxy hiccup, 500) shows an empty,
+        // disabled table instead of an empty, saveable one — a Save click
+        // against that would submit `{devices: []}`, which is a perfectly
+        // legal request, and wipe the real configuration on disk.
+        loaded: false,
+        // The last successfully loaded device count, so save() can tell "the
+        // user really emptied the list" apart from "the list was never loaded".
+        loadedDeviceCount: 0,
 
         async init() {
             await this.load();
@@ -33,8 +42,11 @@ function devicesEditor() {
                 }));
                 this.writable = payload.writable;
                 this.devicesFile = payload.devices_file;
+                this.loadedDeviceCount = this.devices.length;
+                this.loaded = true;
             } catch (err) {
                 this.error = `Could not load the configuration: ${err.message}`;
+                this.loaded = false;
             } finally {
                 this.loading = false;
             }
@@ -77,6 +89,15 @@ function devicesEditor() {
         },
 
         async save() {
+            const submitted = this._payload();
+            if (submitted.length === 0 && this.loadedDeviceCount > 0) {
+                const confirmed = confirm(
+                    `This removes all ${this.loadedDeviceCount} device(s) from the ` +
+                    'configuration. Continue?'
+                );
+                if (!confirmed) return;
+            }
+
             this.saving = true;
             this.error = '';
             this.saved = false;
@@ -84,7 +105,7 @@ function devicesEditor() {
                 const response = await fetch('/api/config/devices', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ devices: this._payload() }),
+                    body: JSON.stringify({ devices: submitted }),
                 });
                 const payload = await response.json();
                 if (!response.ok) {
@@ -102,7 +123,11 @@ function devicesEditor() {
                 this.devices = payload.devices.map(device => ({
                     ...device, password: '', remove_password: false,
                 }));
+                this.loadedDeviceCount = this.devices.length;
                 this.saved = true;
+                // Tell the operational device list (the cards above) to
+                // refresh — otherwise it keeps showing the pre-save devices.
+                this.$dispatch('devices-changed');
                 setTimeout(() => { this.saved = false; }, 4000);
             } catch (err) {
                 this.error = `Save failed: ${err.message}`;

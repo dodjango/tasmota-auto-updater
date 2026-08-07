@@ -190,6 +190,17 @@ def test_put_accepts_an_empty_device_list_on_disk(config_app):
     assert written == [{"ip": "192.168.8.191"}]
 
 
+def test_put_accepts_an_empty_device_list_from_the_client(config_app):
+    """The server must not refuse `{"devices": []}` — deleting the last device is
+    a legitimate request. The client-side guard against an accidentally-empty
+    save (a failed load followed by Save) lives in devices-editor.js, not here.
+    """
+    client, devices_file = config_app
+    response = client.put("/api/config/devices", json={"devices": []})
+    assert response.status_code == 200
+    assert yaml.safe_load(devices_file.read_text(encoding="utf-8"))["devices"] == []
+
+
 def test_put_accepts_a_missing_devices_file(config_app):
     client, devices_file = config_app
     devices_file.unlink()
