@@ -123,3 +123,12 @@ def summarize(results: Sequence[Mapping[str, Any]], command: str
         "comparison_unknown": unknown,
         "failed": failed,
     }
+
+
+def exit_code_for(command: str, summary: Mapping[str, int]) -> int:
+    """Map a tally to an exit code. Error beats outdated beats ok."""
+    if summary.get("failed") or summary.get("comparison_unknown"):
+        return EXIT_ERROR
+    if command == "check" and summary.get("needs_update"):
+        return EXIT_OUTDATED
+    return EXIT_OK

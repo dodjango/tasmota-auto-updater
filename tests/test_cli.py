@@ -141,3 +141,47 @@ def test_summarize_update_does_not_count_an_updated_device_as_skipped():
         "comparison_unknown": 0,
         "failed": 0,
     }
+
+
+def test_exit_code_ok_when_everything_current():
+    summary = cli.summarize([_result()], "check")
+    assert cli.exit_code_for("check", summary) == cli.EXIT_OK
+
+
+def test_exit_code_outdated_for_check():
+    summary = cli.summarize([_result(needs_update=True)], "check")
+    assert cli.exit_code_for("check", summary) == cli.EXIT_OUTDATED
+
+
+def test_exit_code_error_on_unknown_comparison():
+    summary = cli.summarize([_result(latest_version="Unknown")], "check")
+    assert cli.exit_code_for("check", summary) == cli.EXIT_ERROR
+
+
+def test_exit_code_error_beats_outdated():
+    results = [_result(ip="1", needs_update=True), _result(ip="2", success=False)]
+    summary = cli.summarize(results, "check")
+    assert cli.exit_code_for("check", summary) == cli.EXIT_ERROR
+
+
+def test_exit_code_update_never_returns_one():
+    """A device that was just updated still carries needs_update from before."""
+    results = [_result(needs_update=True, update_completed=True)]
+    summary = cli.summarize(results, "update")
+    assert cli.exit_code_for("update", summary) == cli.EXIT_OK
+
+
+def test_exit_code_update_reports_failure():
+    results = [_result(success=False, update_started=True)]
+    summary = cli.summarize(results, "update")
+    assert cli.exit_code_for("update", summary) == cli.EXIT_ERROR
+
+
+def test_exit_code_list_reports_unreachable_device():
+    summary = cli.summarize([_result(success=False)], "list")
+    assert cli.exit_code_for("list", summary) == cli.EXIT_ERROR
+
+
+def test_exit_code_list_ignores_comparison():
+    summary = cli.summarize([_result(latest_version="Unknown")], "list")
+    assert cli.exit_code_for("list", summary) == cli.EXIT_OK
