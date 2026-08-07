@@ -105,7 +105,7 @@ class DeviceConfigResource(Resource):
 
         exposed = []
         for device in devices:
-            entry = {
+            entry: dict[str, Any] = {
                 field: device[field]
                 for field in ("ip", "username", "dns_name", "timeout")
                 if field in device
