@@ -1,6 +1,8 @@
 """API endpoints for the Tasmota updater web application"""
 
+import ipaddress
 import os
+import socket
 from pathlib import Path
 from typing import Any
 from flask import request, jsonify, current_app
@@ -15,6 +17,7 @@ from app.tasmota.updater import (
 )
 from app.tasmota.utils import load_devices_from_file, resolve_dns_name, is_fake_device
 from app.tasmota import device_config
+from app.tasmota import discovery
 from app.tasmota import jobs
 
 
@@ -626,7 +629,181 @@ class JobResource(Resource):
         job = jobs.get_job(job_id)
         if job is None:
             return {'error': 'Job not found'}, 404
+
+        if job.get('kind') == 'discovery' and job.get('results'):
+            devices_file = current_app.config.get('DEVICES_FILE', 'devices.yaml')
+            known = {
+                device.get('ip')
+                for device in load_devices_from_file(str(devices_file))
+            }
+            # load_devices_from_file() answers every failure with an empty list.
+            # For a display flag that is harmless — a known device would show up
+            # as new. It must never be a write baseline, and it is not one here:
+            # discovery has no write path at all.
+            job['results'] = [
+                {**entry, 'already_configured': entry.get('ip') in known}
+                for entry in job['results']
+            ]
+
         return job
+
+
+# A /22 is 1024 addresses — about 25 seconds at 64 workers. Wide enough for any
+# home network, narrow enough that the endpoint cannot be turned into a sweep.
+MAX_SCAN_PREFIX = 22
+MAX_SCAN_HOSTS = 1024
+
+
+def validate_scan_target(value: str) -> ipaddress.IPv4Network:
+    """Decide whether a network may be scanned at all.
+
+    Deliberately stricter than ``is_valid_ip_address()``, which allows public
+    addresses because a device may legitimately sit on one. A *scan* is a
+    different matter: an endpoint that sweeps arbitrary public ranges is a port
+    scanner behind someone's session cookie. Private IPv4 only, and bounded.
+    """
+    try:
+        network = ipaddress.ip_network(value.strip(), strict=False)
+    except (ValueError, AttributeError) as exc:
+        raise ValidationError(f"Not a usable network: {value!r}") from exc
+
+    if not isinstance(network, ipaddress.IPv4Network):
+        raise ValidationError("Only IPv4 networks can be scanned.")
+    if network.is_loopback or network.is_link_local or network.is_multicast:
+        raise ValidationError("Loopback, link-local and multicast ranges cannot be scanned.")
+    if not network.is_private:
+        raise ValidationError(
+            "Only private networks can be scanned, so the scanner cannot be "
+            "pointed at the public internet."
+        )
+    if network.prefixlen < MAX_SCAN_PREFIX:
+        raise ValidationError(
+            f"Network is too large: /{network.prefixlen} exceeds the "
+            f"/{MAX_SCAN_PREFIX} limit of {MAX_SCAN_HOSTS} addresses."
+        )
+    return network
+
+
+def suggest_local_networks() -> list[str]:
+    """Guess the local network, to prefill the scan field.
+
+    A UDP socket 'connected' to an arbitrary address reveals which interface
+    would carry the traffic, without sending a packet. It reveals the address,
+    not its prefix length — /24 is an assumption, which is exactly why the API
+    calls this a suggestion and the UI keeps the field editable.
+    """
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(("192.0.2.1", 9))  # TEST-NET-1, guaranteed unrouted
+        local_ip = probe.getsockname()[0]
+    except OSError:
+        return []
+    finally:
+        probe.close()
+
+    try:
+        network = ipaddress.ip_network(f"{local_ip}/24", strict=False)
+    except ValueError:
+        return []
+    return [str(network)] if network.is_private else []
+
+
+def _validation_message(exc: ValidationError) -> str:
+    """Flatten a ValidationError into one readable sentence for the client."""
+    messages = exc.messages
+    if isinstance(messages, list):
+        return "; ".join(str(message) for message in messages)
+    return str(messages)
+
+
+class DiscoveryResource(Resource):
+    """Find Tasmota devices on the network. Never writes anything.
+
+    Findings are suggestions: they leave through the job endpoint and the user
+    adopts them in the editor, which saves through PUT /api/config/devices.
+    Keeping the write path out of here is what leaves device_config with a
+    single caller.
+    """
+
+    def get(self):
+        """
+        Get scan suggestions and limits
+        ---
+        tags:
+          - discovery
+        responses:
+          200:
+            description: A suggested network to scan and the enforced limits
+            examples:
+              application/json:
+                suggested_networks: ["192.168.1.0/24"]
+                limits: {max_prefix: 22, max_hosts: 1024}
+        """
+        return {
+            "suggested_networks": suggest_local_networks(),
+            "limits": {"max_prefix": MAX_SCAN_PREFIX, "max_hosts": MAX_SCAN_HOSTS},
+        }
+
+    def post(self):
+        """
+        Start a discovery job
+        ---
+        tags:
+          - discovery
+        parameters:
+          - in: body
+            name: body
+            required: true
+            schema:
+              properties:
+                method:
+                  type: string
+                  enum: [mdns, scan]
+                network:
+                  type: string
+                  description: Required for method=scan. Private IPv4, prefix >= 22.
+            examples:
+              scan: {method: scan, network: "192.168.1.0/24"}
+              mdns: {method: mdns}
+        responses:
+          202:
+            description: Job accepted; poll GET /api/jobs/{job_id}
+            examples:
+              application/json: {job_id: "3f2a", status_url: "/api/jobs/3f2a"}
+          400:
+            description: Unknown method, or a network outside the allowed range
+          409:
+            description: A discovery job is already running
+          415:
+            description: Body was not JSON
+        """
+        if not request.is_json:
+            return {'error': 'Unsupported Media Type',
+                    'details': 'Content-Type must be application/json'}, 415
+
+        body = request.get_json(silent=True) or {}
+        method = body.get('method')
+        if method not in ('mdns', 'scan'):
+            return {'error': 'Bad Request',
+                    'details': "'method' must be 'mdns' or 'scan'"}, 400
+
+        hosts = None
+        if method == 'scan':
+            try:
+                network = validate_scan_target(body.get('network') or '')
+            except ValidationError as exc:
+                return {'error': 'Bad Request', 'details': _validation_message(exc)}, 400
+            hosts = discovery.hosts_in_network(network)
+            current_app.logger.info(
+                "Discovery scan requested for %s (%d hosts)", network, len(hosts)
+            )
+        else:
+            current_app.logger.info("Discovery via mDNS requested")
+
+        job_id = jobs.create_discovery_job(method, hosts)
+        if job_id is None:
+            return {'error': 'A discovery job is already in progress'}, 409
+        return {'job_id': job_id, 'status_url': f'/api/jobs/{job_id}'}, 202
 
 
 def init_api(app):
@@ -641,5 +818,6 @@ def init_api(app):
     api.add_resource(DeviceUpdateResource, '/api/update')
     api.add_resource(AllDevicesUpdateResource, '/api/update/all')
     api.add_resource(JobResource, '/api/jobs/<string:job_id>')
+    api.add_resource(DiscoveryResource, '/api/discovery')
 
     return api
