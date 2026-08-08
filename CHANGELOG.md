@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/dodjango/tasmota-auto-updater/compare/v0.5.4...v0.6.0) (2026-08-08)
+
+
+### Features
+
+* **cli:** add a thin CLI over the maintained core ([#127](https://github.com/dodjango/tasmota-auto-updater/issues/127)) ([54a0b7a](https://github.com/dodjango/tasmota-auto-updater/commit/54a0b7ad5ffea84e115024a0118101ba6e9ab6cd))
+* **editor:** manage devices from the web UI ([#128](https://github.com/dodjango/tasmota-auto-updater/issues/128)) ([30d5f63](https://github.com/dodjango/tasmota-auto-updater/commit/30d5f6314029b10353bef4b5802357855587608d))
+* find Tasmota devices on the network ([#131](https://github.com/dodjango/tasmota-auto-updater/issues/131)) ([6e6b161](https://github.com/dodjango/tasmota-auto-updater/commit/6e6b16122171fefdf1c0e37afb01f478dd808e92))
+
+
+### Dependencies
+
+* **deps:** bump hypothesis in the pip-minor-patch group ([#125](https://github.com/dodjango/tasmota-auto-updater/issues/125)) ([5bb88f2](https://github.com/dodjango/tasmota-auto-updater/commit/5bb88f20f3d515108a1a0b99fa2e2d24e016eb98))
+
 ## [0.5.4](https://github.com/dodjango/tasmota-auto-updater/compare/v0.5.3...v0.5.4) (2026-07-27)
 
 
