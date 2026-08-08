@@ -145,15 +145,14 @@ related issues.
 
 Here are some areas where contributions would be particularly welcome:
 
-1. **Device Discovery**: Implement automatic device discovery on the local network
-2. **Authentication**: Add user authentication for the web interface
-3. **Device Grouping**: Allow organizing devices into logical groups
-4. **Custom Firmware Support**: Add support for custom firmware sources
-5. **Scheduled Updates**: Implement scheduled updates through the web interface
-6. **Notifications**: Add email or push notifications for update results
-7. **Dark Mode**: Implement a dark mode theme for the web interface
-8. **Localization**: Add support for multiple languages
-9. **Push Notifications**: Add support for push notifications
+1. **Authentication**: Add user authentication for the web interface
+2. **Device Grouping**: Allow organizing devices into logical groups
+3. **Custom Firmware Support**: Add support for custom firmware sources
+4. **Scheduled Updates**: Implement scheduled updates through the web interface
+5. **Notifications**: Add email or push notifications for update results
+6. **Dark Mode**: Implement a dark mode theme for the web interface
+7. **Localization**: Add support for multiple languages
+8. **Push Notifications**: Add support for push notifications
 10. **Device Inventory**: Add support for tracking device inventory
 11. **Toggle devices**: Add support for toggling devices on and off
 12. **Bulk actions**: Add support for bulk actions on devices

@@ -59,6 +59,35 @@ function devicesEditor() {
             });
         },
 
+        /**
+         * Take findings from the discovery modal as unsaved rows.
+         *
+         * Deliberately additive and deliberately unsaved: the user still has to
+         * add credentials and press Save, so PUT /api/config/devices remains the
+         * only path that writes the file.
+         *
+         * Gated on `loaded` for the same reason addDevice() is. Appending to a
+         * list that never loaded and saving it would submit those rows as the
+         * entire configuration and wipe everything else on disk.
+         */
+        adoptDiscovered(devices) {
+            if (!this.loaded || !this.writable) return;
+            const known = new Set(this.devices.map(device => (device.ip || '').trim()));
+            (devices || [])
+                .filter(device => device.ip && !known.has(device.ip))
+                .forEach(device => {
+                    this.devices.push({
+                        ip: device.ip,
+                        username: '',
+                        dns_name: device.dns_name || '',
+                        timeout: null,
+                        password: '',
+                        has_password: false,
+                        remove_password: false,
+                    });
+                });
+        },
+
         removeDevice(index) {
             const device = this.devices[index];
             const label = device.dns_name || device.ip || 'this device';

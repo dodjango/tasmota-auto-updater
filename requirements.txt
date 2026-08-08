@@ -6,6 +6,11 @@ flask-cors>=6.0.1
 flasgger>=0.9.7.1
 marshmallow>=4.0.1
 watchdog>=6.0.0
+# Floor is mandatory, not cosmetic: anything below 0.149.12 carries
+# GHSA-9663-mqmp-p9mm (CVE-2026-48045), an unbounded TC-deferred queue that lets
+# any host on the local link exhaust memory through spoofed mDNS floods — this
+# feature's own threat model.
+zeroconf>=0.149.12
 python-dotenv>=1.2.1
 gunicorn>=23.0.0
 

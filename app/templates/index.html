@@ -193,7 +193,8 @@
             </div>
         </section>
 
-        <section class="section" x-data="devicesEditor()" x-init="init()">
+        <section class="section" x-data="devicesEditor()" x-init="init()"
+                 @discovery-adopt.window="adoptDiscovered($event.detail.devices)">
           <h2 class="title is-4">Manage Devices</h2>
 
           <div class="notification is-warning" x-show="!writable" x-cloak>
@@ -268,6 +269,12 @@
           <div class="buttons">
             <button class="button" type="button" :disabled="!writable || !loaded" @click="addDevice()"
                     title="Add a new device to the list">Add Device</button>
+            <button class="button is-info" type="button" data-testid="open-discovery"
+                    :disabled="!writable || !loaded"
+                    @click="$dispatch('discovery-open')"
+                    title="Find Tasmota devices on your network and add them to this list">
+              Find Devices
+            </button>
             <button class="button is-primary" type="button"
                     :disabled="!writable || !loaded || saving" :class="{'is-loading': saving}"
                     @click="save()"
@@ -318,7 +325,113 @@
         </div>
     </div>
 
+    <!-- Discovery: finds devices, never writes. Picks leave as a
+         `discovery-adopt` event and become unsaved rows in the editor. -->
+    <div x-data="discoveryModal()" @discovery-open.window="open()"
+         class="modal" :class="{ 'is-active': isOpen }" data-testid="discovery-modal">
+      <div class="modal-background" @click="close()"></div>
+      <div class="modal-card">
+        <header class="modal-card-head">
+          <p class="modal-card-title">Find Devices</p>
+          <button class="delete" type="button" aria-label="Close this dialog"
+                  title="Close this dialog and stop watching the search"
+                  @click="close()"></button>
+        </header>
+        <section class="modal-card-body">
+
+          <div class="field">
+            <div class="control">
+              <button class="button" type="button" data-testid="start-mdns"
+                      :disabled="isRunning" @click="start('mdns')"
+                      title="Listen for devices that announce themselves via mDNS — passive, sends nothing">
+                Search via mDNS
+              </button>
+            </div>
+            <p class="help">
+              Passive and harmless, but it only works when the app shares the
+              network with the devices. In a bridge-network container it cannot
+              find anything.
+            </p>
+          </div>
+
+          <div class="field has-addons">
+            <div class="control is-expanded">
+              <input class="input" type="text" x-model="network"
+                     data-testid="scan-network"
+                     :placeholder="`e.g. 192.168.1.0/24 (max /${limits.max_prefix})`"
+                     aria-label="Network to scan in CIDR notation">
+            </div>
+            <div class="control">
+              <button class="button is-warning" type="button" data-testid="start-scan"
+                      :disabled="isRunning" @click="start('scan')"
+                      title="Scan this network — sends one HTTP request to every address in the range">
+                Scan Network
+              </button>
+            </div>
+          </div>
+
+          <div x-show="isRunning" x-cloak aria-live="polite" data-testid="discovery-progress">
+            <p x-text="progressLabel"></p>
+            <progress class="progress is-small is-info"
+                      :value="total ? completed : null" :max="total || 100"></progress>
+          </div>
+
+          <div class="notification is-warning" x-show="notice" x-cloak
+               data-testid="discovery-notice" aria-live="polite" x-text="notice"></div>
+          <div class="notification is-danger" x-show="error" x-cloak
+               data-testid="discovery-error" aria-live="assertive" x-text="error"></div>
+
+          <table class="table is-fullwidth" x-show="results.length" x-cloak
+                 data-testid="discovery-results">
+            <thead>
+              <tr>
+                <th scope="col"><span class="is-sr-only">Select</span></th>
+                <th scope="col">Address</th><th scope="col">Name</th>
+                <th scope="col">Firmware</th><th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="device in results" :key="device.ip">
+                <tr>
+                  <td>
+                    <input type="checkbox" :value="device.ip"
+                           :disabled="device.already_configured"
+                           :aria-label="`Select ${device.ip} to add to the device list`"
+                           @change="toggle(device.ip)">
+                  </td>
+                  <td x-text="device.ip"></td>
+                  <td x-text="device.friendly_name || device.hostname || '—'"></td>
+                  <td x-text="device.firmware_version || '—'"></td>
+                  <td>
+                    <span class="tag is-light" x-show="device.already_configured">Already in list</span>
+                    <span class="tag is-warning" x-show="device.requires_auth"
+                          title="This device is password-protected — add its credentials after adding it to the list">
+                      Credentials needed
+                    </span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+
+          <p x-show="status === 'completed' && !results.length && !notice" x-cloak
+             data-testid="discovery-empty">No Tasmota devices answered in this range.</p>
+
+        </section>
+        <footer class="modal-card-foot">
+          <button class="button is-primary" type="button" data-testid="adopt-selected"
+                  :disabled="!selected.length" @click="adopt()"
+                  title="Add the selected devices to the list — nothing is written until you press Save">
+            Add Selected to List
+          </button>
+          <button class="button" type="button" @click="close()"
+                  title="Close this dialog and stop watching the search">Close</button>
+        </footer>
+      </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <script src="{{ url_for('static', filename='js/devices-editor.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/discovery.js') }}"></script>
 </body>
 </html>

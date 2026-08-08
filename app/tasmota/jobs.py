@@ -40,7 +40,21 @@ def get_job(job_id: str) -> Optional[Dict[str, Any]]:
 
 def batch_in_progress() -> bool:
     with _lock:
-        return any(j["status"] in ("pending", "running") for j in _jobs.values())
+        return _kind_in_progress_locked("batch")
+
+
+def _kind_in_progress_locked(kind: str) -> bool:
+    """Is a job of this kind pending or running? Caller holds the lock.
+
+    Scoped by kind on purpose. Discovery and batch updates share this store,
+    and an unscoped check would let a running scan block every update — and a
+    running update block every scan — silently, and only in production where
+    both are slow enough to overlap.
+    """
+    return any(
+        job["status"] in ("pending", "running") and job.get("kind") == kind
+        for job in _jobs.values()
+    )
 
 
 def _prune_locked() -> None:
@@ -73,11 +87,12 @@ def create_batch_job(
     """
     resolved_updater = updater or update_device_firmware
     with _lock:
-        if any(j["status"] in ("pending", "running") for j in _jobs.values()):
+        if _kind_in_progress_locked("batch"):
             return None
         job_id = uuid.uuid4().hex
         _jobs[job_id] = {
             "job_id": job_id,
+            "kind": "batch",
             "status": "pending",
             "check_only": bool(check_only),
             "total": 0,
@@ -162,6 +177,98 @@ def _run_batch(
             "updated": updated,
         }
         _set(job_id, status="completed", summary=summary, finished_at=clock())
+    except Exception as exc:  # pragma: no cover - defensive; surfaced to the client
+        _set(job_id, status="error", error=str(exc), finished_at=clock())
+
+
+def create_discovery_job(
+    method: str,
+    hosts: Optional[List[str]],
+    *,
+    runner: Optional[Callable[..., List[Dict[str, Any]]]] = None,
+    clock: Callable[[], float] = time.time,
+    background: bool = True,
+) -> Optional[str]:
+    """Create and start a discovery job. Returns its id, or None if one runs.
+
+    ``runner`` receives a single ``on_progress(completed, total)`` callback and
+    returns the findings; it is injectable so the job mechanics can be tested
+    without touching the network.
+    """
+    resolved = runner or _default_discovery_runner(method, hosts)
+    with _lock:
+        if _kind_in_progress_locked("discovery"):
+            return None
+        job_id = uuid.uuid4().hex
+        _jobs[job_id] = {
+            "job_id": job_id,
+            "kind": "discovery",
+            "method": method,
+            "status": "pending",
+            # mDNS has no total: it listens, it does not work through a list.
+            # None says so; a made-up number would drive a lying progress bar.
+            "total": len(hosts) if hosts is not None else None,
+            "completed": 0,
+            "results": [],
+            "notice": None,
+            "error": None,
+            "created_at": clock(),
+            "finished_at": None,
+        }
+        _prune_locked()
+
+    if background:
+        threading.Thread(
+            target=_run_discovery, args=(job_id, resolved, clock), daemon=True
+        ).start()
+    else:
+        _run_discovery(job_id, resolved, clock)
+    return job_id
+
+
+def _default_discovery_runner(method: str, hosts: Optional[List[str]]):
+    """Bind the core function this method needs, without importing at module load."""
+    from app.tasmota import discovery
+
+    if method == "mdns":
+        return lambda on_progress: discovery.browse_mdns()
+    return lambda on_progress: discovery.scan_network(hosts or [], on_progress=on_progress)
+
+
+NO_MDNS_ANSWER = (
+    "No device announced itself. In a bridge-network container mDNS cannot "
+    "work at all, because multicast does not cross the bridge — see the "
+    "container setup documentation."
+)
+
+
+def _run_discovery(
+    job_id: str,
+    runner: Callable[..., List[Dict[str, Any]]],
+    clock: Callable[[], float],
+) -> None:
+    from app.tasmota import discovery
+
+    try:
+        _set(job_id, status="running")
+
+        def on_progress(completed: int, total: int) -> None:
+            _set(job_id, completed=completed, total=total)
+
+        results = runner(on_progress)
+
+        with _lock:
+            job = _jobs.get(job_id)
+            method = job.get("method") if job else None
+
+        # "Nothing found" and "nothing could reach us" are different answers.
+        # Only the mDNS path can hit the second one, so only it gets the notice.
+        notice = NO_MDNS_ANSWER if not results and method == "mdns" else None
+
+        _set(job_id, status="completed", results=list(results), notice=notice,
+             finished_at=clock())
+    except discovery.MdnsUnavailable as exc:
+        _set(job_id, status="error", error=str(exc), finished_at=clock())
     except Exception as exc:  # pragma: no cover - defensive; surfaced to the client
         _set(job_id, status="error", error=str(exc), finished_at=clock())
 
