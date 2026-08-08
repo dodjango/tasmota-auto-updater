@@ -50,6 +50,10 @@ function discoveryModal() {
         },
 
         reset() {
+            // Drop any timer first. Without this, re-opening the dialog while a
+            // poll is still ticking leaves an orphaned interval that then polls
+            // a jobId of null and writes its 404 into a fresh dialog's error.
+            this.stopPolling();
             this.jobId = null;
             this.status = null;
             this.completed = 0;
