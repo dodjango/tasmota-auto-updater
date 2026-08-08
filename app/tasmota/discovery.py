@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Optional
 
@@ -163,3 +164,106 @@ def hosts_in_network(network: Any) -> list[str]:
     the network itself.
     """
     return [str(host) for host in network.hosts()]
+
+
+# Tasmota announces itself over the generic HTTP service; some builds add a
+# dedicated one. Browsing both costs nothing and catches both.
+MDNS_SERVICES = ("_http._tcp.local.", "_tasmota._tcp.local.")
+
+# How long to listen before answering. mDNS is passive — the only way to find
+# more devices is to wait longer, and four seconds catches a home network.
+MDNS_DURATION = 4.0
+
+
+class MdnsUnavailable(RuntimeError):
+    """zeroconf is not installed or could not be started."""
+
+
+def _import_zeroconf():
+    """Import zeroconf lazily so a missing package fails only the mDNS path.
+
+    Separated into its own function so a test can replace it — the scan path
+    must stay usable even where mDNS cannot work at all.
+    """
+    try:
+        import zeroconf
+        return zeroconf
+    except ImportError:
+        return None
+
+
+def _decode(value: Any) -> Optional[str]:
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value if isinstance(value, str) else None
+
+
+def service_info_to_finding(info: Any) -> Optional[dict[str, Any]]:
+    """Translate one announced service into a finding.
+
+    mDNS carries far less than ``Status 0``: an address, a name, and whatever
+    the device chose to put into its TXT record. The missing fields stay None
+    rather than being guessed — the UI shows what is known.
+    """
+    addresses = info.parsed_addresses() if callable(getattr(info, "parsed_addresses", None)) else []
+    if not addresses:
+        return None
+
+    properties = getattr(info, "properties", None) or {}
+    decoded = {_decode(key): _decode(value) for key, value in properties.items()}
+
+    hostname = (getattr(info, "server", "") or "").rstrip(".")
+    if hostname.endswith(".local"):
+        hostname = hostname[: -len(".local")]
+
+    return {
+        "ip": addresses[0],
+        "hostname": hostname or None,
+        "friendly_name": decoded.get("friendly_name") or decoded.get("devicename"),
+        "module": decoded.get("module"),
+        "firmware_version": decoded.get("version"),
+        "mac": decoded.get("mac"),
+        "requires_auth": False,
+    }
+
+
+def browse_mdns(duration: float = MDNS_DURATION) -> list[dict[str, Any]]:
+    """Collect devices that announce themselves for ``duration`` seconds.
+
+    Passive: this listens, it does not probe anything. In a bridge-network
+    container it will find nothing at all — multicast does not cross the
+    bridge — and that is a fact about the deployment, not an error here. The
+    caller is responsible for saying so.
+    """
+    module = _import_zeroconf()
+    if module is None:
+        raise MdnsUnavailable(
+            "mDNS discovery needs the 'zeroconf' package, which is not installed."
+        )
+
+    found: dict[str, dict[str, Any]] = {}
+
+    def _on_change(zeroconf_instance, service_type, name, state_change, **kwargs):
+        if state_change is not module.ServiceStateChange.Added:
+            return
+        info = zeroconf_instance.get_service_info(service_type, name, timeout=1000)
+        if info is None:
+            return
+        entry = service_info_to_finding(info)
+        if entry:
+            found.setdefault(entry["ip"], entry)
+
+    try:
+        instance = module.Zeroconf()
+    except OSError as exc:
+        # No multicast-capable interface, or the socket could not be bound.
+        raise MdnsUnavailable(f"mDNS could not be started: {exc}") from exc
+
+    try:
+        browser = module.ServiceBrowser(instance, list(MDNS_SERVICES), handlers=[_on_change])
+        time.sleep(duration)
+        browser.cancel()
+    finally:
+        instance.close()
+
+    return list(found.values())

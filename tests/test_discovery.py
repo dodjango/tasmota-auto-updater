@@ -136,3 +136,32 @@ def test_hosts_in_network_leaves_out_network_and_broadcast():
 
     hosts = discovery.hosts_in_network(ipaddress.ip_network("192.168.1.0/29"))
     assert hosts == [f"192.168.1.{n}" for n in range(1, 7)]
+
+
+def test_browse_mdns_raises_when_zeroconf_is_missing(monkeypatch):
+    monkeypatch.setattr(discovery, "_import_zeroconf", lambda: None)
+    with pytest.raises(discovery.MdnsUnavailable):
+        discovery.browse_mdns(duration=0.01)
+
+
+def test_service_info_becomes_a_finding():
+    """The browse callback's translation step, tested without a network."""
+    class FakeInfo:
+        parsed_addresses = staticmethod(lambda: ["192.168.1.42"])
+        server = "tasmota-1234.local."
+        properties = {b"friendly_name": b"Hallway Light", b"module": b"Sonoff Basic"}
+
+    entry = discovery.service_info_to_finding(FakeInfo())
+    assert entry["ip"] == "192.168.1.42"
+    assert entry["hostname"] == "tasmota-1234"
+    assert entry["friendly_name"] == "Hallway Light"
+    assert entry["requires_auth"] is False
+
+
+def test_service_info_without_an_address_is_skipped():
+    class FakeInfo:
+        parsed_addresses = staticmethod(lambda: [])
+        server = "ghost.local."
+        properties = {}
+
+    assert discovery.service_info_to_finding(FakeInfo()) is None
