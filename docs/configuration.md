@@ -54,6 +54,39 @@ A few behaviours are easy to miss:
   (`EBUSY`) and the editor disables itself with an explanation. See
   [Container Setup](container-setup.md) for the directory-mount migration.
 
+## Finding Devices on the Network
+
+Next to "Add Device" the editor has **Find Devices**, which searches the network
+and lets you add what it finds. Two separate searches, chosen explicitly — there
+is no automatic fallback from one to the other, and nothing starts on its own:
+
+- **Search via mDNS** listens for devices that announce themselves. Passive and
+  harmless, but it only works when the app shares the network with the devices.
+  In a bridge-network container it can never find anything, because multicast
+  does not cross the bridge; see [Container Setup](container-setup.md).
+- **Scan network** probes every address in a range you specify. It is prefilled
+  with a guess at your local network — a guess, because the prefix length is not
+  detectable, so `/24` is assumed. Correct it if your network is larger.
+
+Discovery **never writes** the configuration. Selected devices are added to the
+editor as unsaved rows; nothing reaches `devices.yaml` until you press Save.
+
+**Discovery introduces no new environment variable.** The limits below are fixed
+in the application, deliberately: a scanner whose reach can be configured from
+outside is a scanner that ends up pointed somewhere it should not be.
+
+| Limit | Value |
+|---|---|
+| Allowed targets | Private IPv4 only — public, loopback, link-local and multicast are rejected |
+| Largest range | `/22` (1024 addresses) |
+| Parallel probes | 64 |
+| Timeout per address | 1.5 s, no retries |
+| Credentials sent | None, ever |
+
+A password-protected device answers the probe with HTTP 401. It is listed as
+"Credentials needed" and left alone — discovery does not retry it with stored
+passwords. Add its username and password in the editor after adopting it.
+
 ## Environment Variables
 
 The application supports the following environment variables:

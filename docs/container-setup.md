@@ -70,6 +70,72 @@ docker run -d -p 5001:5001 \
 > above; the default `DEVICES_FILE` already expects it there, so only set
 > that variable yourself if you choose a different path.
 
+## Device Discovery and the Network Mode
+
+The web UI can find Tasmota devices for you ("Find Devices" in the *Manage
+Devices* section). It offers two ways to search, and **only one of them works
+in the default container setup**:
+
+| Method | Bridge network (default) | `network_mode: host` |
+|---|---|---|
+| **Scan network** (IP range) | Works | Works |
+| **Search via mDNS** | Finds nothing, ever | Works |
+
+The scan needs nothing special: the container can reach your LAN through the
+bridge, so probing a range of addresses works exactly as it does on the host.
+
+mDNS is different, and the reason is worth stating plainly: mDNS relies on
+multicast traffic, and multicast does not cross a container bridge. This is not
+a bug and no setting inside the application can fix it. In a bridge-network
+container the mDNS search will always come back empty — the UI says so rather
+than claiming that no devices exist.
+
+### Enabling mDNS with host networking
+
+If you want mDNS, the container has to share the host's network stack:
+
+```yaml
+services:
+  tasmota-updater:
+    image: ghcr.io/dodjango/tasmota-updater:latest
+    # Required for mDNS. Read the trade-offs below before enabling this.
+    network_mode: host
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+    environment:
+      - DEVICES_FILE=/app/config/devices.yaml
+      - HOST=0.0.0.0
+      - PORT=5001
+    restart: unless-stopped
+```
+
+What you give up by doing this:
+
+- **No network isolation.** The container shares the host's network namespace.
+  It can reach anything the host can reach, and services it opens are host
+  services.
+- **No port mapping.** The `ports:` section stops applying — the app binds
+  `PORT` on the host directly, so that port must be free.
+- **Linux only.** On Docker Desktop for macOS and Windows, `network_mode: host`
+  does not give the container the LAN's multicast traffic, so it does not
+  actually solve the problem there.
+
+**Our recommendation:** keep the default bridge network and use the range scan.
+It finds the same devices, needs no privileges, and costs nothing in isolation.
+Turn on host networking only if you specifically want mDNS and understand the
+trade-off above.
+
+### What the scanner is allowed to do
+
+The scan is fenced server-side and cannot be widened from the browser:
+
+- private IPv4 ranges only — a scan of public address space is rejected
+- at most a `/22` (1024 addresses)
+- 64 probes in parallel, 1.5 s timeout each, no retries
+- no credentials are ever sent; a password-protected device is reported as
+  such and left alone
+
 ## Manual Container Setup
 
 If you prefer to build and run the container manually:

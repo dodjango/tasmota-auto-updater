@@ -60,6 +60,33 @@ The navigation bar contains buttons for batch operations:
 2. **Check All**: Check for updates on all devices at once
 3. **Update All**: Update all outdated devices with one click
 
+### Finding Devices on the Network
+
+The *Manage Devices* section has a **Find Devices** button that opens a search
+dialog. It offers two searches, and you pick one — nothing runs automatically,
+not even when the dialog opens:
+
+1. **Search via mDNS**: listens for devices announcing themselves. One click, no
+   parameters. It only works when the app shares the network with the devices —
+   inside a bridge-network container it will always come back empty, and says so.
+2. **Scan Network**: probes every address in the range you give it. The field is
+   prefilled with a guess at your local network. The scan sends one HTTP request
+   per address, which is why it takes a deliberate click rather than happening
+   by itself.
+
+The result is a list, not an action. Devices already in your configuration are
+shown but cannot be selected again, and password-protected devices are marked
+"Credentials needed" — discovery never sends credentials, so you add those
+yourself afterwards.
+
+Selecting devices and pressing **Add Selected to List** puts them into the
+editor as *unsaved* rows. Nothing is written to `devices.yaml` until you press
+Save, which gives you the chance to fill in usernames and passwords first.
+
+Closing the dialog stops watching the search, not the search itself — it ends on
+its own within about 25 seconds. That is why the button says "Close" rather than
+"Cancel".
+
 ### Real-time Feedback
 
 The interface provides real-time feedback during operations:

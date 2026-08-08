@@ -186,6 +186,112 @@ Initiates firmware updates for all configured devices.
 }
 ```
 
+### Device Discovery
+
+Discovery finds Tasmota devices on the network. It **never writes** the
+configuration: the result is a list of suggestions, and adopting them into
+`devices.yaml` goes through the regular editor endpoint.
+
+Both searches run as background jobs, because a full range scan takes about
+25 seconds and would otherwise block the single worker.
+
+#### Get Scan Suggestions and Limits
+
+```
+GET /api/discovery
+```
+
+**Response Example:**
+
+```json
+{
+  "suggested_networks": ["192.168.1.0/24"],
+  "limits": {"max_prefix": 22, "max_hosts": 1024}
+}
+```
+
+`suggested_networks` is a *guess*: the app can determine which interface would
+carry the traffic, but not that interface's prefix length, so `/24` is assumed.
+Treat it as a prefill, not as a fact — correct it if your network is larger.
+
+#### Start a Discovery Job
+
+```
+POST /api/discovery
+```
+
+**Request Body:**
+
+```json
+{"method": "scan", "network": "192.168.1.0/24"}
+```
+
+or
+
+```json
+{"method": "mdns"}
+```
+
+**Response Example (202 Accepted):**
+
+```json
+{"job_id": "3f2a9c1e...", "status_url": "/api/jobs/3f2a9c1e..."}
+```
+
+The scan target is validated server-side and cannot be widened by the client:
+private IPv4 only, prefix `>= 22`, no loopback, link-local or multicast. A host
+address with a prefix (`192.168.1.55/24`) is normalised to its network. A
+rejected target returns `400` with the reason in `details`.
+
+**Status codes:** `202` accepted · `400` unknown method or disallowed network ·
+`409` a discovery job is already running · `415` body was not JSON.
+
+#### Poll a Discovery Job
+
+```
+GET /api/jobs/{job_id}
+```
+
+**Response Example:**
+
+```json
+{
+  "job_id": "3f2a9c1e...",
+  "kind": "discovery",
+  "method": "scan",
+  "status": "completed",
+  "completed": 254,
+  "total": 254,
+  "results": [
+    {
+      "ip": "192.168.1.42",
+      "hostname": "tasmota-1234",
+      "friendly_name": "Hallway Light",
+      "module": "ESP8266EX",
+      "firmware_version": "14.2.0(release-tasmota)",
+      "mac": "AA:BB:CC:DD:EE:FF",
+      "requires_auth": false,
+      "already_configured": false
+    }
+  ],
+  "notice": null,
+  "error": null
+}
+```
+
+Notes on the fields:
+
+- `total` is `null` for `mdns`: that search listens rather than working through
+  a list, so there is no total to report and none is invented.
+- `requires_auth` marks a device that answered with HTTP 401. Discovery never
+  sends credentials — not even ones already stored — so this is a result, not a
+  reason for a second attempt. Add the credentials in the editor after adopting
+  the device.
+- `already_configured` marks an address that is already in `devices.yaml`.
+- `notice` carries an explanation when an empty result would otherwise mislead.
+  An mDNS run that finds nothing in a bridge-network container says so, rather
+  than implying that no devices exist.
+
 ## Error Handling
 
 The API uses standard HTTP status codes to indicate the success or failure of requests:
