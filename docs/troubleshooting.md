@@ -93,8 +93,32 @@ This guide helps you diagnose and resolve common issues with Tasmota Remote Upda
 
 **Solutions:**
 1. Check the application logs for detailed error information
-2. Verify the API is working using curl: `curl http://localhost:5001/api/v1/devices`
+2. Verify the application is up — this endpoint needs no authentication:
+   `curl http://localhost:5001/health`
 3. Restart the web application
+
+**Getting `401 Unauthorized` on every `/api/*` call?**
+
+That is the intended behaviour, not a fault. The API is fail-closed: it accepts
+either the web UI's session cookie or an `X-API-Key` header, and rejects
+anything else. For a command-line client, set the `API_KEY` environment
+variable on the application and send it:
+
+```bash
+curl -H "X-API-Key: your-key-here" http://localhost:5001/api/devices
+```
+
+If `API_KEY` is unset, the header route is disabled entirely and only the
+browser UI can reach the API. See [API Documentation](api.md) for details.
+
+**Getting `415 Unsupported Media Type` on a POST or PUT?**
+
+State-changing requests must carry `Content-Type: application/json`.
+
+**Getting `404` on an endpoint you found in an older guide?**
+
+There is no `/api/v1` prefix and there never was. The paths are `/api/devices`,
+`/api/update`, `/api/update/all` and so on — see [API Documentation](api.md).
 
 ## Logging and Debugging
 
