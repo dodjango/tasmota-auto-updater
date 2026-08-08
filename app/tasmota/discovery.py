@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Callable, Optional
 
 import requests
 
@@ -109,3 +110,56 @@ def probe_host(ip: str, *, timeout: float = 1.5, port: int = 80) -> Optional[dic
         return None
 
     return parse_status(payload, ip)
+
+
+# Fixed, and deliberately not reachable from the API. A per-request concurrency
+# knob behind a session is a denial-of-service button.
+DEFAULT_WORKERS = 64
+
+
+def scan_network(
+    hosts: list[str],
+    *,
+    probe: Callable[[str], Optional[dict[str, Any]]] = probe_host,
+    workers: int = DEFAULT_WORKERS,
+    on_progress: Optional[Callable[[int, int], None]] = None,
+) -> list[dict[str, Any]]:
+    """Probe every host in ``hosts`` concurrently and return the finds.
+
+    Takes a finished host list, never a CIDR: what may be scanned is a policy
+    question and belongs to the caller. A probe that raises costs its own host
+    and nothing else — in a range of a thousand addresses, one broken host must
+    not abort the sweep.
+    """
+    total = len(hosts)
+    results: list[dict[str, Any]] = []
+    completed = 0
+
+    if not hosts:
+        return results
+
+    with ThreadPoolExecutor(max_workers=min(workers, total)) as pool:
+        futures = {pool.submit(probe, host): host for host in hosts}
+        for future in as_completed(futures):
+            completed += 1
+            try:
+                found = future.result()
+            except Exception as exc:  # one bad host, not a failed scan
+                logger.debug("%s: probe failed: %s", futures[future], exc)
+                found = None
+            if found:
+                results.append(found)
+            if on_progress:
+                on_progress(completed, total)
+
+    return results
+
+
+def hosts_in_network(network: Any) -> list[str]:
+    """Every usable address in an ``ipaddress`` network, as strings.
+
+    ``.hosts()`` already leaves out the network and broadcast address for a
+    normal IPv4 network — the point of going through it rather than iterating
+    the network itself.
+    """
+    return [str(host) for host in network.hosts()]
