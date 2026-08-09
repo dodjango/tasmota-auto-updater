@@ -3,6 +3,26 @@
 ## [0.6.0](https://github.com/dodjango/tasmota-auto-updater/compare/v0.5.4...v0.6.0) (2026-08-08)
 
 
+### ⚠️ Breaking change: mount the configuration directory, not the file
+
+The new device editor writes `devices.yaml`, and replacing a file that is bind-mounted individually fails with `EBUSY`. Mount its **directory** instead:
+
+```yaml
+- ./config:/app/config          # was: ./devices.yaml:/app/devices.yaml
+```
+
+Move `devices.yaml` into that directory. The image now defaults to `DEVICES_FILE=/app/config/devices.yaml`, so no extra environment variable is needed.
+
+Deployments that keep the old single-file mount keep working — the editor stays read-only and explains why in the UI.
+
+
+### Note on device discovery
+
+The new network discovery needs no deployment change: the IP range scan works in the default bridge-network container.
+
+mDNS does not, and cannot — multicast does not cross a container bridge, so that search will always come back empty there (the UI says so rather than claiming no devices exist). If you want mDNS, the container has to run with `network_mode: host`, which costs network isolation and port mapping and only helps on Linux. See [Container Setup](docs/container-setup.md) for the trade-off.
+
+
 ### Features
 
 * **cli:** add a thin CLI over the maintained core ([#127](https://github.com/dodjango/tasmota-auto-updater/issues/127)) ([54a0b7a](https://github.com/dodjango/tasmota-auto-updater/commit/54a0b7ad5ffea84e115024a0118101ba6e9ab6cd))
