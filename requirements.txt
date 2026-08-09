@@ -10,7 +10,7 @@ watchdog>=6.0.0
 # GHSA-9663-mqmp-p9mm (CVE-2026-48045), an unbounded TC-deferred queue that lets
 # any host on the local link exhaust memory through spoofed mDNS floods — this
 # feature's own threat model.
-zeroconf>=0.149.12
+zeroconf>=0.150.0
 python-dotenv>=1.2.1
 gunicorn>=23.0.0
 
