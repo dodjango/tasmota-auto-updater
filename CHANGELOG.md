@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.1](https://github.com/dodjango/tasmota-auto-updater/compare/v0.6.0...v0.6.1) (2026-08-09)
+
+
+### Dependencies
+
+* **deps:** bump the pip-minor-patch group with 3 updates ([#133](https://github.com/dodjango/tasmota-auto-updater/issues/133)) ([031a065](https://github.com/dodjango/tasmota-auto-updater/commit/031a065c5ee938d593bbc0ba62e11c02b2b6f8e7))
+* **deps:** update zeroconf requirement from &gt;=0.149.12 to &gt;=0.150.0 ([#134](https://github.com/dodjango/tasmota-auto-updater/issues/134)) ([bcfc9b4](https://github.com/dodjango/tasmota-auto-updater/commit/bcfc9b4d0d58e18e418072eca9ef3cc66e6eb447))
+
 ## [0.6.0](https://github.com/dodjango/tasmota-auto-updater/compare/v0.5.4...v0.6.0) (2026-08-08)
 
 
