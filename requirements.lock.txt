@@ -11,7 +11,7 @@ flask-cors==6.0.5
 flask-restful==0.3.10
 freezegun==1.5.5
 gunicorn==26.2.0
-hypothesis==6.167.1
+hypothesis==6.168.0
 idna==3.19
 iniconfig==2.3.0
 itsdangerous==2.2.0
